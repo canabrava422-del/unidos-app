@@ -1,0 +1,17 @@
+{
+  "name": "Unidos — Gastos en pareja",
+  "short_name": "Unidos",
+  "description": "Lleven juntos los gastos de la boda, la luna de miel y su vida después de casados.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F7F2EC",
+  "theme_color": "#3E4C63",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

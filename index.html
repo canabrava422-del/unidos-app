@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Unidos — Gastos en pareja</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#3E4C63">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Unidos">
+<style>
+  :root{
+    --rose:#C4707B;
+    --rose-soft:#F1DADD;
+    --indigo:#3E4C63;
+    --indigo-soft:#DDE2E9;
+    --gold:#BF9B4E;
+    --gold-soft:#F0E6D0;
+    --sage:#7C8B6F;
+    --sage-soft:#E3E8DE;
+    --paper:#F7F2EC;
+    --card:#FFFFFF;
+    --ink:#2B2620;
+    --ink-dim:#8A8175;
+    --line:#E8E0D5;
+    --danger:#B4483F;
+    --radius:18px;
+    --radius-sm:12px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .serif{font-family:ui-serif,Georgia,"Times New Roman",serif;}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";}
+  #app{
+    max-width:480px;
+    margin:0 auto;
+    min-height:100vh;
+    background:var(--paper);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    padding-bottom:86px;
+  }
+  header.top{
+    padding:22px 20px 14px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+  }
+  header.top .title{
+    font-family:ui-serif,Georgia,serif;
+    font-size:26px;
+    font-weight:600;
+    letter-spacing:.2px;
+  }
+  header.top .title .knot{color:var(--rose);}
+  header.top .sub{font-size:13px;color:var(--ink-dim);margin-top:2px;}
+  .gear{
+    width:38px;height:38px;border-radius:50%;
+    background:var(--card);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;flex-shrink:0;
+  }
+  .gear svg{width:18px;height:18px;stroke:var(--ink-dim);}
+
+  main{flex:1;padding:0 20px;}
+
+  /* ---------- Hero donut ---------- */
+  .hero{
+    background:var(--card);
+    border-radius:var(--radius);
+    padding:22px 20px 20px;
+    box-shadow:0 1px 0 rgba(0,0,0,.03);
+    border:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    gap:18px;
+    margin-bottom:16px;
+  }
+  .hero .ring-wrap{position:relative;width:112px;height:112px;flex-shrink:0;}
+  .hero .ring-wrap svg{width:100%;height:100%;}
+  .hero .ring-center{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+  }
+  .hero .ring-center .lbl{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-dim);}
+  .hero .ring-center .amt{font-size:15px;font-weight:700;margin-top:1px;}
+  .hero .legend{flex:1;}
+  .hero .legend-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:7px;}
+  .hero .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+  .hero .legend-row .name{color:var(--ink-dim);flex:1;}
+  .hero .legend-row .val{font-weight:700;}
+  .hero .diff{
+    margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);
+    font-size:12px;color:var(--ink-dim);line-height:1.4;
+  }
+
+  /* ---------- section headers ---------- */
+  .section-head{
+    display:flex;align-items:baseline;justify-content:space-between;
+    margin:22px 0 10px;
+  }
+  .section-head h2{font-family:ui-serif,Georgia,serif;font-size:17px;margin:0;font-weight:600;}
+  .section-head a.link{font-size:12.5px;color:var(--indigo);cursor:pointer;text-decoration:none;font-weight:600;}
+
+  /* ---------- objetivo cards ---------- */
+  .obj-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:12px;
+    cursor:pointer;
+    transition:transform .1s ease;
+  }
+  .obj-card:active{transform:scale(.99);}
+  .obj-top{display:flex;align-items:center;gap:12px;}
+  .obj-icon{
+    width:42px;height:42px;border-radius:12px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:20px;flex-shrink:0;
+  }
+  .obj-name{font-weight:700;font-size:15px;}
+  .obj-cat-count{font-size:12px;color:var(--ink-dim);margin-top:1px;}
+  .obj-total{margin-left:auto;text-align:right;}
+  .obj-total .amt{font-weight:700;font-size:15px;}
+  .obj-total .meta{font-size:11px;color:var(--ink-dim);}
+  .obj-bar-track{height:6px;background:var(--line);border-radius:4px;margin-top:12px;overflow:hidden;}
+  .obj-bar-fill{height:100%;border-radius:4px;background:var(--gold);}
+  .obj-split{display:flex;height:6px;border-radius:4px;overflow:hidden;margin-top:12px;background:var(--line);}
+
+  .empty{
+    text-align:center;padding:34px 16px;color:var(--ink-dim);font-size:13.5px;
+    border:1px dashed var(--line);border-radius:var(--radius);line-height:1.6;
+  }
+
+  /* ---------- gasto list ---------- */
+  .filters{display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px;}
+  .filters select, .filters input{
+    border:1px solid var(--line);background:var(--card);border-radius:99px;
+    padding:8px 12px;font-size:12.5px;color:var(--ink);flex-shrink:0;
+  }
+  .gasto-row{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:13px 14px;margin-bottom:9px;display:flex;align-items:center;gap:12px;
+  }
+  .gasto-tag{
+    width:6px;align-self:stretch;border-radius:4px;flex-shrink:0;
+  }
+  .gasto-mid{flex:1;min-width:0;}
+  .gasto-cat{font-weight:700;font-size:13.5px;}
+  .gasto-desc{font-size:12px;color:var(--ink-dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .gasto-meta{font-size:11px;color:var(--ink-dim);margin-top:3px;display:flex;gap:6px;align-items:center;}
+  .who-chip{
+    font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;
+  }
+  .gasto-right{text-align:right;flex-shrink:0;}
+  .gasto-amt{font-weight:700;font-size:14.5px;}
+  .gasto-del{
+    background:none;border:none;color:var(--ink-dim);font-size:11px;
+    margin-top:4px;cursor:pointer;padding:0;
+  }
+
+  /* ---------- bottom nav ---------- */
+  nav.tabbar{
+    position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+    width:100%;max-width:480px;
+    background:rgba(247,242,236,.92);backdrop-filter:blur(10px);
+    border-top:1px solid var(--line);
+    display:flex;padding:8px 10px calc(10px + env(safe-area-inset-bottom));
+    z-index:40;
+  }
+  nav.tabbar button{
+    flex:1;background:none;border:none;display:flex;flex-direction:column;
+    align-items:center;gap:3px;color:var(--ink-dim);font-size:10.5px;cursor:pointer;
+    padding:6px 0;font-family:inherit;
+  }
+  nav.tabbar button.active{color:var(--indigo);}
+  nav.tabbar svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;}
+
+  .fab{
+    position:fixed;bottom:78px;left:50%;
+    transform:translateX(calc(-50% + 200px));
+    width:54px;height:54px;border-radius:50%;
+    background:var(--indigo);color:#fff;border:none;
+    font-size:26px;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 8px 20px rgba(62,76,99,.35);cursor:pointer;z-index:41;
+  }
+  @media (max-width:480px){
+    .fab{transform:translateX(calc(-50% + 44vw));}
+  }
+
+  /* ---------- modal ---------- */
+  .overlay{
+    position:fixed;inset:0;background:rgba(43,38,32,.45);
+    display:flex;align-items:flex-end;justify-content:center;z-index:60;
+  }
+  .sheet{
+    background:var(--paper);width:100%;max-width:480px;
+    border-radius:22px 22px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));
+    max-height:88vh;overflow-y:auto;
+  }
+  .sheet h3{font-family:ui-serif,Georgia,serif;font-size:19px;margin:0 0 16px;}
+  .field{margin-bottom:14px;}
+  .field label{font-size:12px;color:var(--ink-dim);font-weight:600;display:block;margin-bottom:6px;}
+  .field input, .field select, .field textarea{
+    width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:12px;
+    background:var(--card);font-size:14.5px;color:var(--ink);font-family:inherit;
+  }
+  .field-row{display:flex;gap:10px;}
+  .field-row .field{flex:1;}
+  .seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  .seg button{
+    flex:1;border:none;background:var(--card);padding:11px;font-size:13.5px;
+    cursor:pointer;color:var(--ink-dim);font-weight:600;font-family:inherit;
+  }
+  .seg button.on{background:var(--indigo);color:#fff;}
+  .btn-primary{
+    width:100%;background:var(--indigo);color:#fff;border:none;border-radius:12px;
+    padding:14px;font-size:14.5px;font-weight:700;cursor:pointer;margin-top:6px;
+  }
+  .btn-ghost{
+    width:100%;background:none;border:1px solid var(--line);color:var(--ink-dim);
+    border-radius:12px;padding:12px;font-size:13px;cursor:pointer;margin-top:8px;font-weight:600;
+  }
+  .close-x{
+    position:absolute;top:16px;right:18px;background:none;border:none;
+    font-size:20px;color:var(--ink-dim);cursor:pointer;
+  }
+  .icon-pick{display:flex;flex-wrap:wrap;gap:8px;}
+  .icon-pick button{
+    width:42px;height:42px;border-radius:12px;border:1px solid var(--line);
+    background:var(--card);font-size:19px;cursor:pointer;
+  }
+  .icon-pick button.on{border-color:var(--indigo);background:var(--indigo-soft);}
+  .tint-pick{display:flex;gap:8px;}
+  .tint-pick .sw{width:34px;height:34px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
+  .tint-pick .sw.on{border-color:var(--ink);}
+  .cat-manage{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
+  .cat-chip{
+    background:var(--card);border:1px solid var(--line);border-radius:99px;
+    padding:6px 10px 6px 12px;font-size:12px;display:flex;align-items:center;gap:6px;
+  }
+  .cat-chip button{background:none;border:none;color:var(--ink-dim);cursor:pointer;font-size:13px;padding:0;}
+
+  .onb-hero{text-align:center;padding:14px 4px 6px;}
+  .onb-hero .rings{font-size:36px;}
+  .onb-hero h1{font-family:ui-serif,Georgia,serif;font-size:24px;margin:8px 0 4px;}
+  .onb-hero p{font-size:13.5px;color:var(--ink-dim);line-height:1.5;margin:0 0 18px;}
+  .who-pick{display:flex;gap:10px;margin-top:8px;}
+  .who-pick button{
+    flex:1;border:1px solid var(--line);background:var(--card);border-radius:14px;
+    padding:16px 8px;cursor:pointer;font-family:inherit;
+  }
+  .who-pick button .em{font-size:24px;display:block;margin-bottom:6px;}
+  .who-pick button .nm{font-weight:700;font-size:13.5px;}
+  .who-pick button.on{border-color:var(--indigo);background:var(--indigo-soft);}
+
+  ::-webkit-scrollbar{display:none;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const $ = (sel,ctx=document)=>ctx.querySelector(sel);
+const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
+const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const todayISO = ()=> new Date().toISOString().slice(0,10);
+const fmt = n => new Intl.NumberFormat('es-PE',{style:'currency',currency:'PEN',maximumFractionDigits:2}).format(n||0);
+const fmtDate = d => { try{ return new Date(d+'T00:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'}); }catch(e){return d;} };
+
+const ICONS = ['💍','🌴','🏠','🌱','✈️','🚗','🎓','🍼','💼','🐾','🎁','⭐'];
+const TINTS = [
+  {id:'rose', bg:'var(--rose-soft)', fg:'var(--rose)'},
+  {id:'indigo', bg:'var(--indigo-soft)', fg:'var(--indigo)'},
+  {id:'gold', bg:'var(--gold-soft)', fg:'var(--gold)'},
+  {id:'sage', bg:'var(--sage-soft)', fg:'var(--sage)'},
+];
+function tint(id){ return TINTS.find(t=>t.id===id) || TINTS[0]; }
+
+function defaultData(){
+  return {
+    parejaNombres: { novio:'Novio', novia:'Novia' },
+    objetivos: [
+      { id:'boda', nombre:'Boda', icono:'💍', tint:'rose', meta:null,
+        categorias:['Local y Banquete','Fotografía y Video','Vestido y Traje','Flores y Decoración','Música y DJ','Invitaciones','Anillos','Transporte','Belleza','Trámites y Licencia','Detalles para invitados','Pastel','Imprevistos','Otros'] },
+      { id:'luna-de-miel', nombre:'Luna de Miel', icono:'🌴', tint:'gold', meta:null,
+        categorias:['Vuelos','Alojamiento','Actividades y Tours','Comida','Transporte local','Compras','Seguro de viaje','Otros'] },
+      { id:'casa', nombre:'Casa', icono:'🏠', tint:'indigo', meta:null,
+        categorias:['Muebles','Electrodomésticos','Remodelación','Servicios básicos','Decoración','Otros'] },
+      { id:'ahorro-terreno', nombre:'Ahorro para Terreno', icono:'🌱', tint:'sage', meta:null,
+        categorias:['Aporte de ahorro','Trámites legales','Otros'] },
+    ],
+    gastos: []
+  };
+}
+
+let state = {
+  data: null,
+  perfil: null,
+  tab: 'resumen',
+  filterObjetivo: 'todos',
+  filterQuien: 'todos',
+  search: '',
+};
+
+/*
+  Capa de almacenamiento.
+  - "perfil" (quién eres tú) siempre vive solo en este dispositivo -> localStorage.
+  - "data" (objetivos y gastos, lo que se comparte entre los dos) hoy vive en
+    localStorage de este mismo dispositivo. Para que se sincronice de verdad
+    entre el celular de la novia y el del novio, hay que conectar un backend
+    (por ejemplo Supabase). Ver README.md para instrucciones de cómo activarlo:
+    solo hay que completar SUPABASE_URL y SUPABASE_ANON_KEY abajo y todo lo
+    demás ya está preparado para usarlos.
+*/
+const SUPABASE_URL = "";
+const SUPABASE_ANON_KEY = "";
+const SUPABASE_ROW_ID = "pareja-1"; // fila compartida única para la pareja
+
+async function loadShared(){
+  if(SUPABASE_URL && SUPABASE_ANON_KEY){
+    try{
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/unidos_data?id=eq.${SUPABASE_ROW_ID}&select=payload`, {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+      const rows = await res.json();
+      if(rows && rows[0] && rows[0].payload) return rows[0].payload;
+    }catch(e){ console.error('supabase load error', e); }
+    return null;
+  }
+  try{
+    const raw = localStorage.getItem('unidos_data');
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+async function saveShared(){
+  if(SUPABASE_URL && SUPABASE_ANON_KEY){
+    try{
+      await fetch(`${SUPABASE_URL}/rest/v1/unidos_data?on_conflict=id`, {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({ id: SUPABASE_ROW_ID, payload: state.data })
+      });
+    }catch(e){ console.error('supabase save error', e); }
+    return;
+  }
+  try{ localStorage.setItem('unidos_data', JSON.stringify(state.data)); }
+  catch(e){ console.error('storage error', e); }
+}
+async function loadPerfil(){
+  try{
+    const raw = localStorage.getItem('unidos_perfil');
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+async function savePerfil(){
+  try{ localStorage.setItem('unidos_perfil', JSON.stringify(state.perfil)); }
+  catch(e){ console.error('storage error', e); }
+}
+
+function computeTotals(data){
+  const totals = { total:0, novio:0, novia:0, porObjetivo:{} };
+  data.objetivos.forEach(o=>{ totals.porObjetivo[o.id] = {total:0, novio:0, novia:0}; });
+  data.gastos.forEach(g=>{
+    totals.total += g.monto;
+    totals[g.quien] = (totals[g.quien]||0) + g.monto;
+    if(!totals.porObjetivo[g.objetivoId]) totals.porObjetivo[g.objetivoId] = {total:0,novio:0,novia:0};
+    totals.porObjetivo[g.objetivoId].total += g.monto;
+    totals.porObjetivo[g.objetivoId][g.quien] += g.monto;
+  });
+  return totals;
+}
+
+/* ---------------- render root ---------------- */
+function render(){
+  const app = $('#app');
+  if(!state.perfil || !state.perfil.quien){
+    app.innerHTML = onboardingView();
+    bindOnboarding();
+    return;
+  }
+  app.innerHTML = `
+    ${topBar()}
+    <main id="main">${tabContent()}</main>
+    <button class="fab" id="fabAdd">+</button>
+    ${tabBar()}
+  `;
+  bindMain();
+}
+
+function topBar(){
+  const nombres = state.data.parejaNombres;
+  const label = state.tab==='resumen' ? `Hola, ${nombres[state.perfil.quien]||''}`
+    : state.tab==='gastos' ? 'Todos los gastos' : 'Objetivos';
+  const sub = state.tab==='resumen' ? 'Así van sus finanzas juntos' : '';
+  return `
+  <header class="top">
+    <div>
+      <div class="title">${label==='Todos los gastos'||label==='Objetivos' ? label : `Hola, <span class="knot">${nombres[state.perfil.quien]||''}</span>`}</div>
+      ${sub?`<div class="sub">${sub}</div>`:''}
+    </div>
+    <div class="gear" id="gearBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </div>
+  </header>`;
+}
+
+function tabBar(){
+  const t = state.tab;
+  return `
+  <nav class="tabbar">
+    <button data-tab="resumen" class="${t==='resumen'?'active':''}">
+      <svg viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>
+      Resumen
+    </button>
+    <button data-tab="objetivos" class="${t==='objetivos'?'active':''}">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>
+      Objetivos
+    </button>
+    <button data-tab="gastos" class="${t==='gastos'?'active':''}">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      Gastos
+    </button>
+  </nav>`;
+}
+
+function tabContent(){
+  if(state.tab==='resumen') return resumenView();
+  if(state.tab==='objetivos') return objetivosView();
+  if(state.tab==='gastos') return gastosView();
+  return '';
+}
+
+/* ---------------- onboarding ---------------- */
+function onboardingView(){
+  const nombres = (state.data && state.data.parejaNombres) || {novio:'',novia:''};
+  return `
+  <div style="padding:34px 22px;">
+    <div class="onb-hero">
+      <div class="rings">💍🤍💍</div>
+      <h1>Unidos</h1>
+      <p>Un solo lugar para llevar los gastos de la boda, la luna de miel y todo lo que viene después — juntos, sin sorpresas.</p>
+    </div>
+    <div class="field">
+      <label>Nombre de la novia</label>
+      <input id="ipNovia" value="${nombres.novia||''}" placeholder="Ej. María">
+    </div>
+    <div class="field">
+      <label>Nombre del novio</label>
+      <input id="ipNovio" value="${nombres.novio||''}" placeholder="Ej. Ronald">
+    </div>
+    <div class="field">
+      <label>¿Quién eres tú en este dispositivo?</label>
+      <div class="who-pick">
+        <button data-who="novia" id="pickNovia"><span class="em">👰</span><span class="nm">La novia</span></button>
+        <button data-who="novio" id="pickNovio"><span class="em">🤵</span><span class="nm">El novio</span></button>
+      </div>
+    </div>
+    <button class="btn-primary" id="startBtn">Empezar</button>
+    <p style="text-align:center;font-size:11px;color:var(--ink-dim);margin-top:12px;line-height:1.5;">
+      Los gastos que agregues aquí los verá tu pareja en tiempo real, y viceversa.
+    </p>
+  </div>`;
+}
+
+function bindOnboarding(){
+  let who = null;
+  $('#pickNovia').onclick = ()=>{ who='novia'; $('#pickNovia').classList.add('on'); $('#pickNovio').classList.remove('on'); };
+  $('#pickNovio').onclick = ()=>{ who='novio'; $('#pickNovio').classList.add('on'); $('#pickNovia').classList.remove('on'); };
+  $('#startBtn').onclick = async ()=>{
+    const novia = $('#ipNovia').value.trim() || 'Novia';
+    const novio = $('#ipNovio').value.trim() || 'Novio';
+    if(!who){ alert('Elige si eres la novia o el novio para continuar.'); return; }
+    state.data.parejaNombres = { novia, novio };
+    await saveShared();
+    state.perfil = { quien: who };
+    await savePerfil();
+    render();
+  };
+}
+
+/* ---------------- resumen ---------------- */
+function donutSVG(pctA, pctB, colorA, colorB, size=112, stroke=12){
+  const r = 50 - stroke/2;
+  const c = 2*Math.PI*r;
+  const lenA = c*pctA;
+  const lenB = c*pctB;
+  return `
+  <svg viewBox="0 0 100 100">
+    <circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--line)" stroke-width="${stroke}"/>
+    <circle cx="50" cy="50" r="${r}" fill="none" stroke="${colorA}" stroke-width="${stroke}"
+      stroke-dasharray="${lenA} ${c-lenA}" stroke-dashoffset="0" transform="rotate(-90 50 50)" stroke-linecap="round"/>
+    <circle cx="50" cy="50" r="${r}" fill="none" stroke="${colorB}" stroke-width="${stroke}"
+      stroke-dasharray="${lenB} ${c-lenB}" stroke-dashoffset="${-lenA}" transform="rotate(-90 50 50)" stroke-linecap="round"/>
+  </svg>`;
+}
+
+function resumenView(){
+  const t = computeTotals(state.data);
+  const nombres = state.data.parejaNombres;
+  const pctNovio = t.total>0 ? t.novio/t.total : 0.5;
+  const pctNovia = t.total>0 ? t.novia/t.total : 0.5;
+  const diff = t.novio - t.novia;
+  let diffText = 'Ambos han aportado lo mismo hasta ahora.';
+  if(Math.abs(diff) > 0.009){
+    diffText = diff>0
+      ? `${nombres.novio} ha aportado ${fmt(diff)} más que ${nombres.novia}.`
+      : `${nombres.novia} ha aportado ${fmt(-diff)} más que ${nombres.novio}.`;
+  }
+
+  const objCards = state.data.objetivos.map(o=>{
+    const ot = t.porObjetivo[o.id] || {total:0,novio:0,novia:0};
+    const tn = tint(o.tint);
+    const pctMeta = o.meta ? Math.min(100, Math.round((ot.total/o.meta)*100)) : null;
+    return `
+    <div class="obj-card" data-obj="${o.id}">
+      <div class="obj-top">
+        <div class="obj-icon" style="background:${tn.bg}">${o.icono}</div>
+        <div>
+          <div class="obj-name">${o.nombre}</div>
+          <div class="obj-cat-count">${o.categorias.length} categorías</div>
+        </div>
+        <div class="obj-total">
+          <div class="amt num">${fmt(ot.total)}</div>
+          ${o.meta ? `<div class="meta num">${pctMeta}% de ${fmt(o.meta)}</div>` : `<div class="meta">sin meta</div>`}
+        </div>
+      </div>
+      ${o.meta ? `<div class="obj-bar-track"><div class="obj-bar-fill" style="width:${pctMeta}%"></div></div>` : ''}
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="hero">
+    <div class="ring-wrap">
+      ${donutSVG(pctNovio,pctNovia,'var(--indigo)','var(--rose)')}
+      <div class="ring-center">
+        <div class="lbl">Total unido</div>
+        <div class="amt num">${fmt(t.total)}</div>
+      </div>
+    </div>
+    <div class="legend">
+      <div class="legend-row"><span class="dot" style="background:var(--indigo)"></span><span class="name">${nombres.novio}</span><span class="val num">${fmt(t.novio)}</span></div>
+      <div class="legend-row"><span class="dot" style="background:var(--rose)"></span><span class="name">${nombres.novia}</span><span class="val num">${fmt(t.novia)}</span></div>
+      <div class="diff">${diffText}</div>
+    </div>
+  </div>
+
+  <div class="section-head"><h2>Objetivos</h2><a class="link" data-tab="objetivos">Ver todos</a></div>
+  ${objCards || `<div class="empty">Aún no hay objetivos. Ve a la pestaña Objetivos para crear el primero.</div>`}
+
+  <div class="section-head"><h2>Últimos gastos</h2><a class="link" data-tab="gastos">Ver todos</a></div>
+  ${recentGastosHTML(5)}
+  `;
+}
+
+function recentGastosHTML(n){
+  const list = [...state.data.gastos].sort((a,b)=> b.fecha.localeCompare(a.fecha) || b.id.localeCompare(a.id)).slice(0,n);
+  if(list.length===0) return `<div class="empty">Todavía no registran gastos. Toca el botón "+" para agregar el primero.</div>`;
+  return list.map(g=>gastoRowHTML(g)).join('');
+}
+
+/* ---------------- objetivos tab ---------------- */
+function objetivosView(){
+  const t = computeTotals(state.data);
+  const cards = state.data.objetivos.map(o=>{
+    const ot = t.porObjetivo[o.id] || {total:0,novio:0,novia:0};
+    const tn = tint(o.tint);
+    const pctNovio = ot.total>0 ? ot.novio/ot.total : 0.5;
+    const pctNovia = ot.total>0 ? ot.novia/ot.total : 0.5;
+    const pctMeta = o.meta ? Math.min(100, Math.round((ot.total/o.meta)*100)) : null;
+    return `
+    <div class="obj-card" data-objopen="${o.id}">
+      <div class="obj-top">
+        <div class="obj-icon" style="background:${tn.bg}">${o.icono}</div>
+        <div>
+          <div class="obj-name">${o.nombre}</div>
+          <div class="obj-cat-count">${o.categorias.length} categorías · ${state.data.gastos.filter(g=>g.objetivoId===o.id).length} gastos</div>
+        </div>
+        <div class="obj-total">
+          <div class="amt num">${fmt(ot.total)}</div>
+          ${o.meta ? `<div class="meta num">meta ${fmt(o.meta)}</div>` : `<div class="meta">sin meta</div>`}
+        </div>
+      </div>
+      <div class="obj-split">
+        <div style="width:${pctNovio*100}%;background:var(--indigo)"></div>
+        <div style="width:${pctNovia*100}%;background:var(--rose)"></div>
+      </div>
+      ${o.meta ? `<div class="obj-bar-track"><div class="obj-bar-fill" style="width:${pctMeta}%"></div></div>` : ''}
+    </div>`;
+  }).join('');
+
+  return `
+  ${cards || `<div class="empty">Creen su primer objetivo: la boda, la luna de miel, la casa, un terreno...</div>`}
+  <button class="btn-ghost" id="newObjBtn">+ Crear nuevo objetivo</button>
+  `;
+}
+
+/* ---------------- gastos tab ---------------- */
+function gastoRowHTML(g){
+  const obj = state.data.objetivos.find(o=>o.id===g.objetivoId);
+  const tn = tint(obj ? obj.tint : 'indigo');
+  const whoColor = g.quien==='novio' ? 'var(--indigo)' : 'var(--rose)';
+  const whoBg = g.quien==='novio' ? 'var(--indigo-soft)' : 'var(--rose-soft)';
+  const whoName = state.data.parejaNombres[g.quien];
+  return `
+  <div class="gasto-row">
+    <div class="gasto-tag" style="background:${tn.fg}"></div>
+    <div class="gasto-mid">
+      <div class="gasto-cat">${g.categoria}</div>
+      ${g.descripcion ? `<div class="gasto-desc">${g.descripcion}</div>` : ''}
+      <div class="gasto-meta">
+        <span class="who-chip" style="background:${whoBg};color:${whoColor}">${whoName}</span>
+        <span>${obj ? obj.nombre : ''} · ${fmtDate(g.fecha)}</span>
+      </div>
+    </div>
+    <div class="gasto-right">
+      <div class="gasto-amt num">${fmt(g.monto)}</div>
+      <button class="gasto-del" data-delgasto="${g.id}">Eliminar</button>
+    </div>
+  </div>`;
+}
+
+function gastosView(){
+  const objOptions = state.data.objetivos.map(o=>`<option value="${o.id}" ${state.filterObjetivo===o.id?'selected':''}>${o.icono} ${o.nombre}</option>`).join('');
+  let list = [...state.data.gastos];
+  if(state.filterObjetivo!=='todos') list = list.filter(g=>g.objetivoId===state.filterObjetivo);
+  if(state.filterQuien!=='todos') list = list.filter(g=>g.quien===state.filterQuien);
+  if(state.search.trim()) {
+    const s = state.search.trim().toLowerCase();
+    list = list.filter(g => (g.categoria+' '+(g.descripcion||'')).toLowerCase().includes(s));
+  }
+  list.sort((a,b)=> b.fecha.localeCompare(a.fecha) || b.id.localeCompare(a.id));
+
+  const nombres = state.data.parejaNombres;
+  return `
+  <div class="filters">
+    <select id="fObjetivo">
+      <option value="todos" ${state.filterObjetivo==='todos'?'selected':''}>Todos los objetivos</option>
+      ${objOptions}
+    </select>
+    <select id="fQuien">
+      <option value="todos" ${state.filterQuien==='todos'?'selected':''}>Los dos</option>
+      <option value="novio" ${state.filterQuien==='novio'?'selected':''}>${nombres.novio}</option>
+      <option value="novia" ${state.filterQuien==='novia'?'selected':''}>${nombres.novia}</option>
+    </select>
+    <input id="fSearch" placeholder="Buscar..." value="${state.search}">
+  </div>
+  ${list.length ? list.map(gastoRowHTML).join('') : `<div class="empty">No hay gastos que coincidan con este filtro.</div>`}
+  `;
+}
+
+/* ---------------- bind events ---------------- */
+function bindMain(){
+  $$('[data-tab]').forEach(el=>{
+    el.onclick = ()=>{ state.tab = el.getAttribute('data-tab'); render(); };
+  });
+  $('#gearBtn').onclick = openSettingsModal;
+  $('#fabAdd').onclick = ()=> openGastoModal();
+
+  if(state.tab==='objetivos'){
+    $$('[data-objopen]').forEach(el=>{
+      el.onclick = ()=> openObjetivoModal(el.getAttribute('data-objopen'));
+    });
+    const nb = $('#newObjBtn'); if(nb) nb.onclick = ()=> openObjetivoModal(null);
+  }
+  if(state.tab==='resumen'){
+    $$('[data-obj]').forEach(el=>{
+      el.onclick = ()=> openObjetivoModal(el.getAttribute('data-obj'));
+    });
+  }
+  if(state.tab==='gastos'){
+    $('#fObjetivo').onchange = e=>{ state.filterObjetivo=e.target.value; render(); };
+    $('#fQuien').onchange = e=>{ state.filterQuien=e.target.value; render(); };
+    $('#fSearch').oninput = e=>{ state.search=e.target.value; render(); };
+  }
+  $$('[data-delgasto]').forEach(el=>{
+    el.onclick = async (ev)=>{
+      ev.stopPropagation();
+      if(confirm('¿Eliminar este gasto?')){
+        state.data.gastos = state.data.gastos.filter(g=>g.id!==el.getAttribute('data-delgasto'));
+        await saveShared();
+        render();
+      }
+    };
+  });
+}
+
+/* ---------------- modal: add gasto ---------------- */
+function openGastoModal(prefillObjId){
+  const objs = state.data.objetivos;
+  if(objs.length===0){ alert('Primero crea un objetivo (por ejemplo, Boda) desde la pestaña Objetivos.'); return; }
+  const defaultObj = prefillObjId || objs[0].id;
+  const overlay = document.createElement('div');
+  overlay.className='overlay';
+  overlay.innerHTML = `
+  <div class="sheet">
+    <button class="close-x" id="closeSheet">✕</button>
+    <h3>Nuevo gasto</h3>
+    <div class="field">
+      <label>Objetivo</label>
+      <select id="gObjetivo">${objs.map(o=>`<option value="${o.id}" ${o.id===defaultObj?'selected':''}>${o.icono} ${o.nombre}</option>`).join('')}</select>
+    </div>
+    <div class="field">
+      <label>Categoría</label>
+      <input id="gCategoria" list="catlist" placeholder="Elige o escribe una nueva">
+      <datalist id="catlist"></datalist>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Monto (S/)</label>
+        <input id="gMonto" type="number" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="field">
+        <label>Fecha</label>
+        <input id="gFecha" type="date" value="${todayISO()}">
+      </div>
+    </div>
+    <div class="field">
+      <label>Descripción (opcional)</label>
+      <input id="gDesc" placeholder="Ej. adelanto al local">
+    </div>
+    <div class="field">
+      <label>¿Quién lo pagó?</label>
+      <div class="seg">
+        <button type="button" data-w="novia" id="wNovia">${state.data.parejaNombres.novia}</button>
+        <button type="button" data-w="novio" id="wNovio">${state.data.parejaNombres.novio}</button>
+      </div>
+    </div>
+    <button class="btn-primary" id="saveGasto">Guardar gasto</button>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
+  $('#closeSheet',overlay).onclick = ()=> overlay.remove();
+
+  let who = state.perfil.quien;
+  const setWho = w=>{ who=w; $('#wNovia',overlay).classList.toggle('on', w==='novia'); $('#wNovio',overlay).classList.toggle('on', w==='novio'); };
+  setWho(who);
+  $('#wNovia',overlay).onclick = ()=>setWho('novia');
+  $('#wNovio',overlay).onclick = ()=>setWho('novio');
+
+  function refreshCats(){
+    const o = state.data.objetivos.find(x=>x.id===$('#gObjetivo',overlay).value);
+    $('#catlist',overlay).innerHTML = o.categorias.map(c=>`<option value="${c}">`).join('');
+  }
+  refreshCats();
+  $('#gObjetivo',overlay).onchange = refreshCats;
+
+  $('#saveGasto',overlay).onclick = async ()=>{
+    const objetivoId = $('#gObjetivo',overlay).value;
+    const categoria = $('#gCategoria',overlay).value.trim();
+    const monto = parseFloat($('#gMonto',overlay).value);
+    const fecha = $('#gFecha',overlay).value || todayISO();
+    const descripcion = $('#gDesc',overlay).value.trim();
+    if(!categoria){ alert('Escribe o elige una categoría.'); return; }
+    if(!monto || monto<=0){ alert('Ingresa un monto válido.'); return; }
+    const obj = state.data.objetivos.find(o=>o.id===objetivoId);
+    if(obj && !obj.categorias.includes(categoria)) obj.categorias.push(categoria);
+    state.data.gastos.push({ id:uid(), objetivoId, categoria, monto, fecha, descripcion, quien:who });
+    await saveShared();
+    overlay.remove();
+    render();
+  };
+}
+
+/* ---------------- modal: objetivo (crear/editar) ---------------- */
+function openObjetivoModal(objId){
+  const isNew = !objId;
+  const obj = isNew ? { id:null, nombre:'', icono:'💍', tint:'rose', meta:null, categorias:[] } : state.data.objetivos.find(o=>o.id===objId);
+  let icono = obj.icono, tintSel = obj.tint;
+  let cats = [...obj.categorias];
+
+  const overlay = document.createElement('div');
+  overlay.className='overlay';
+  overlay.innerHTML = `
+  <div class="sheet">
+    <button class="close-x" id="closeSheet">✕</button>
+    <h3>${isNew ? 'Nuevo objetivo' : obj.nombre}</h3>
+    <div class="field">
+      <label>Nombre</label>
+      <input id="oNombre" value="${obj.nombre}" placeholder="Ej. Casa, Terreno, Viaje...">
+    </div>
+    <div class="field">
+      <label>Ícono</label>
+      <div class="icon-pick" id="iconPick">
+        ${ICONS.map(i=>`<button type="button" data-i="${i}" class="${i===icono?'on':''}">${i}</button>`).join('')}
+      </div>
+    </div>
+    <div class="field">
+      <label>Color</label>
+      <div class="tint-pick" id="tintPick">
+        ${TINTS.map(t=>`<div class="sw ${t.id===tintSel?'on':''}" data-t="${t.id}" style="background:${t.fg}"></div>`).join('')}
+      </div>
+    </div>
+    <div class="field">
+      <label>Meta de presupuesto en S/ (opcional)</label>
+      <input id="oMeta" type="number" min="0" step="0.01" value="${obj.meta || ''}" placeholder="Ej. 15000">
+    </div>
+    <div class="field">
+      <label>Categorías de gasto</label>
+      <div class="cat-manage" id="catManage">
+        ${cats.map(c=>`<span class="cat-chip">${c}<button data-rmcat="${c}">✕</button></span>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <input id="newCatInput" placeholder="Agregar categoría" style="flex:1;padding:9px 12px;border:1px solid var(--line);border-radius:99px;font-size:12.5px;">
+        <button type="button" id="addCatBtn" class="btn-ghost" style="width:auto;margin:0;padding:9px 14px;">Agregar</button>
+      </div>
+    </div>
+    <button class="btn-primary" id="saveObj">${isNew ? 'Crear objetivo' : 'Guardar cambios'}</button>
+    ${!isNew ? `<button class="btn-ghost" id="delObj">Eliminar objetivo</button>` : ''}
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
+  $('#closeSheet',overlay).onclick = ()=> overlay.remove();
+
+  $$('#iconPick button',overlay).forEach(b=>{
+    b.onclick = ()=>{ icono=b.getAttribute('data-i'); $$('#iconPick button',overlay).forEach(x=>x.classList.remove('on')); b.classList.add('on'); };
+  });
+  $$('#tintPick .sw',overlay).forEach(b=>{
+    b.onclick = ()=>{ tintSel=b.getAttribute('data-t'); $$('#tintPick .sw',overlay).forEach(x=>x.classList.remove('on')); b.classList.add('on'); };
+  });
+  function renderCats(){
+    $('#catManage',overlay).innerHTML = cats.map(c=>`<span class="cat-chip">${c}<button data-rmcat="${c}">✕</button></span>`).join('') || `<span style="font-size:12px;color:var(--ink-dim)">Sin categorías todavía</span>`;
+    $$('[data-rmcat]',overlay).forEach(b=>{
+      b.onclick = ()=>{ cats = cats.filter(c=>c!==b.getAttribute('data-rmcat')); renderCats(); };
+    });
+  }
+  renderCats();
+  $('#addCatBtn',overlay).onclick = ()=>{
+    const v = $('#newCatInput',overlay).value.trim();
+    if(v && !cats.includes(v)){ cats.push(v); $('#newCatInput',overlay).value=''; renderCats(); }
+  };
+
+  $('#saveObj',overlay).onclick = async ()=>{
+    const nombre = $('#oNombre',overlay).value.trim();
+    if(!nombre){ alert('Ponle un nombre al objetivo.'); return; }
+    if(cats.length===0){ alert('Agrega al menos una categoría de gasto.'); return; }
+    const metaVal = parseFloat($('#oMeta',overlay).value);
+    const meta = metaVal>0 ? metaVal : null;
+    if(isNew){
+      state.data.objetivos.push({ id:uid(), nombre, icono, tint:tintSel, meta, categorias:cats });
+    } else {
+      obj.nombre=nombre; obj.icono=icono; obj.tint=tintSel; obj.meta=meta; obj.categorias=cats;
+    }
+    await saveShared();
+    overlay.remove();
+    render();
+  };
+
+  if(!isNew){
+    $('#delObj',overlay).onclick = async ()=>{
+      const count = state.data.gastos.filter(g=>g.objetivoId===obj.id).length;
+      const msg = count>0
+        ? `Este objetivo tiene ${count} gasto(s) registrados. Se eliminarán también. ¿Continuar?`
+        : '¿Eliminar este objetivo?';
+      if(confirm(msg)){
+        state.data.gastos = state.data.gastos.filter(g=>g.objetivoId!==obj.id);
+        state.data.objetivos = state.data.objetivos.filter(o=>o.id!==obj.id);
+        await saveShared();
+        overlay.remove();
+        render();
+      }
+    };
+  }
+}
+
+/* ---------------- modal: settings ---------------- */
+function openSettingsModal(){
+  const overlay = document.createElement('div');
+  overlay.className='overlay';
+  const n = state.data.parejaNombres;
+  overlay.innerHTML = `
+  <div class="sheet">
+    <button class="close-x" id="closeSheet">✕</button>
+    <h3>Ajustes</h3>
+    <div class="field">
+      <label>Nombre de la novia</label>
+      <input id="sNovia" value="${n.novia}">
+    </div>
+    <div class="field">
+      <label>Nombre del novio</label>
+      <input id="sNovio" value="${n.novio}">
+    </div>
+    <div class="field">
+      <label>¿Quién eres tú en este dispositivo?</label>
+      <div class="seg">
+        <button type="button" data-w="novia" id="sWNovia">Novia</button>
+        <button type="button" data-w="novio" id="sWNovio">Novio</button>
+      </div>
+    </div>
+    <button class="btn-primary" id="saveSettings">Guardar</button>
+    <p style="text-align:center;font-size:11px;color:var(--ink-dim);margin-top:14px;line-height:1.5;">
+      Los nombres y objetivos se comparten entre ambos dispositivos. Quién eres tú se guarda solo en este dispositivo.
+    </p>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
+  $('#closeSheet',overlay).onclick = ()=> overlay.remove();
+
+  let who = state.perfil.quien;
+  const setWho = w=>{ who=w; $('#sWNovia',overlay).classList.toggle('on', w==='novia'); $('#sWNovio',overlay).classList.toggle('on', w==='novio'); };
+  setWho(who);
+  $('#sWNovia',overlay).onclick=()=>setWho('novia');
+  $('#sWNovio',overlay).onclick=()=>setWho('novio');
+
+  $('#saveSettings',overlay).onclick = async ()=>{
+    state.data.parejaNombres = {
+      novia: $('#sNovia',overlay).value.trim() || 'Novia',
+      novio: $('#sNovio',overlay).value.trim() || 'Novio',
+    };
+    await saveShared();
+    state.perfil.quien = who;
+    await savePerfil();
+    overlay.remove();
+    render();
+  };
+}
+
+/* ---------------- boot ---------------- */
+async function boot(){
+  const shared = await loadShared();
+  state.data = shared || defaultData();
+  if(!shared) await saveShared();
+  state.perfil = await loadPerfil();
+  render();
+
+  if(SUPABASE_URL && SUPABASE_ANON_KEY){
+    setInterval(async ()=>{
+      if(document.querySelector('.overlay')) return; // no interrumpir mientras se edita
+      const fresh = await loadShared();
+      if(fresh) { state.data = fresh; render(); }
+    }, 12000);
+  }
+}
+boot();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
