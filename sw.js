@@ -1,9 +1,17 @@
-const CACHE = "unidos-v1";
+const CACHE = "unidos-v2";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
-  self.skipWaiting();
+  // No se llama a skipWaiting() aquí a propósito: así el navegador deja esta
+  // versión nueva "esperando" hasta que el usuario confirme la actualización
+  // desde el aviso que aparece en la app.
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", (e) => {
