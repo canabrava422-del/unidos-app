@@ -297,7 +297,12 @@ const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
-const fmt = n => new Intl.NumberFormat('es-PE',{style:'currency',currency:'PEN',maximumFractionDigits:2}).format(n||0);
+const fmt = n => {
+  const m = (state.data && state.data.moneda) || 'PEN';
+  const locale = m === 'USD' ? 'en-US' : 'es-PE';
+  return new Intl.NumberFormat(locale,{style:'currency',currency:m,maximumFractionDigits:2}).format(n||0);
+};
+const currSym = () => ((state.data && state.data.moneda)==='USD' ? '$' : 'S/');
 const fmtDate = d => { try{ return new Date(d+'T00:00:00').toLocaleDateString('es-PE',{day:'2-digit',month:'short'}); }catch(e){return d;} };
 
 const ICONS = ['💍','🌴','🏠','🌱','✈️','🚗','🎓','🍼','💼','🐾','🎁','⭐'];
@@ -312,6 +317,7 @@ function tint(id){ return TINTS.find(t=>t.id===id) || TINTS[0]; }
 function defaultData(){
   return {
     parejaNombres: { novio:'Novio', novia:'Novia' },
+    moneda: 'PEN',
     objetivos: [
       { id:'boda', nombre:'Boda', icono:'💍', tint:'rose', meta:null,
         categorias:['Local y Banquete','Fotografía y Video','Vestido y Traje','Flores y Decoración','Música y DJ','Invitaciones','Anillos','Transporte','Belleza','Trámites y Licencia','Detalles para invitados','Pastel','Imprevistos','Otros'] },
@@ -744,7 +750,7 @@ function openGastoModal(prefillObjId){
     </div>
     <div class="field-row">
       <div class="field">
-        <label>Monto (S/)</label>
+        <label>Monto (${currSym()})</label>
         <input id="gMonto" type="number" min="0" step="0.01" placeholder="0.00">
       </div>
       <div class="field">
@@ -829,7 +835,7 @@ function openObjetivoModal(objId){
       </div>
     </div>
     <div class="field">
-      <label>Meta de presupuesto en S/ (opcional)</label>
+      <label>Meta de presupuesto en ${currSym()} (opcional)</label>
       <input id="oMeta" type="number" min="0" step="0.01" value="${obj.meta || ''}" placeholder="Ej. 15000">
     </div>
     <div class="field">
@@ -924,6 +930,13 @@ function openSettingsModal(){
         <button type="button" data-w="novio" id="sWNovio">Novio</button>
       </div>
     </div>
+    <div class="field">
+      <label>Moneda</label>
+      <div class="seg">
+        <button type="button" data-m="PEN" id="sMonPEN">Soles (S/)</button>
+        <button type="button" data-m="USD" id="sMonUSD">Dólares ($)</button>
+      </div>
+    </div>
     <button class="btn-primary" id="saveSettings">Guardar</button>
     <p style="text-align:center;font-size:11px;color:var(--ink-dim);margin-top:14px;line-height:1.5;">
       Los nombres y objetivos se comparten entre ambos dispositivos. Quién eres tú se guarda solo en este dispositivo.
@@ -939,11 +952,18 @@ function openSettingsModal(){
   $('#sWNovia',overlay).onclick=()=>setWho('novia');
   $('#sWNovio',overlay).onclick=()=>setWho('novio');
 
+  let moneda = state.data.moneda || 'PEN';
+  const setMoneda = m=>{ moneda=m; $('#sMonPEN',overlay).classList.toggle('on', m==='PEN'); $('#sMonUSD',overlay).classList.toggle('on', m==='USD'); };
+  setMoneda(moneda);
+  $('#sMonPEN',overlay).onclick=()=>setMoneda('PEN');
+  $('#sMonUSD',overlay).onclick=()=>setMoneda('USD');
+
   $('#saveSettings',overlay).onclick = async ()=>{
     state.data.parejaNombres = {
       novia: $('#sNovia',overlay).value.trim() || 'Novia',
       novio: $('#sNovio',overlay).value.trim() || 'Novio',
     };
+    state.data.moneda = moneda;
     await saveShared();
     state.perfil.quien = who;
     await savePerfil();
@@ -956,6 +976,7 @@ function openSettingsModal(){
 async function boot(){
   const shared = await loadShared();
   state.data = shared || defaultData();
+  if(!state.data.moneda) state.data.moneda = 'PEN';
   if(!shared) await saveShared();
   state.perfil = await loadPerfil();
   render();
