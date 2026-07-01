@@ -962,7 +962,13 @@ async function boot(){
 
   if(SUPABASE_URL && SUPABASE_ANON_KEY){
     setInterval(async ()=>{
-      if(document.querySelector('.overlay')) return; // no interrumpir mientras se edita
+      // No interrumpir si todavía no terminó de configurar su perfil (onboarding)
+      if(!state.perfil || !state.perfil.quien) return;
+      // No interrumpir si hay un modal/formulario abierto
+      if(document.querySelector('.overlay')) return;
+      // No interrumpir si está escribiendo en cualquier campo de la pantalla principal
+      const activo = document.activeElement;
+      if(activo && ['INPUT','TEXTAREA','SELECT'].includes(activo.tagName)) return;
       const fresh = await loadShared();
       if(fresh) { state.data = fresh; render(); }
     }, 12000);
