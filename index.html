@@ -7,7 +7,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="theme-color" content="#5B5A2C">
+<meta name="theme-color" content="#6E3B3F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Unidos">
@@ -15,18 +15,18 @@
   :root{
     --rose:#52664A;
     --rose-soft:#DEE5D8;
-    --indigo:#5B5A2C;
-    --indigo-soft:#E4E2CD;
-    --gold:#A9853E;
-    --gold-soft:#EFE6CC;
-    --sage:#7C8F92;
-    --sage-soft:#E2E8E8;
+    --indigo:#6E3B3F;
+    --indigo-soft:#E9DBDA;
+    --gold:#B0872E;
+    --gold-soft:#F0E4C7;
+    --sage:#5E7D86;
+    --sage-soft:#DBE5E7;
     --paper:#EEECE0;
     --card:#F8F6EF;
     --ink:#262420;
     --ink-dim:#948C78;
     --line:#DED8C6;
-    --danger:#A65A48;
+    --danger:#B03B2E;
     --radius:18px;
     --radius-sm:12px;
   }
@@ -971,6 +971,8 @@ async function boot(){
 boot();
 
 if ('serviceWorker' in navigator) {
+  let actualizacionAceptada = false; // solo se vuelve true si el usuario toca "Actualizar"
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').then((reg) => {
       // revisa si hay una versión nueva publicada cada 5 minutos mientras la app está abierta
@@ -988,10 +990,17 @@ if ('serviceWorker' in navigator) {
           }
         });
       });
+
+      window.__unidosMarcarActualizacion = () => { actualizacionAceptada = true; };
     }).catch(() => {});
 
     let yaRecargo = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
+      // Ignora el cambio de controlador que ocurre la primera vez que el
+      // Service Worker toma control de la página (por ejemplo, al abrir la
+      // app recién instalada). Sin este chequeo, la app se recargaba sola
+      // justo cuando alguien estaba escribiendo su nombre por primera vez.
+      if (!actualizacionAceptada) return;
       if (yaRecargo) return;
       yaRecargo = true;
       window.location.reload();
@@ -1011,6 +1020,7 @@ function showUpdateBanner(reg){
   `;
   document.body.appendChild(el);
   document.getElementById('updGo').onclick = () => {
+    if (window.__unidosMarcarActualizacion) window.__unidosMarcarActualizacion();
     if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
   };
   document.getElementById('updClose').onclick = () => el.remove();
