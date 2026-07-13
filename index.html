@@ -399,20 +399,27 @@ async function loadShared(){
       const res = await fetch(`${SUPABASE_URL}/rest/v1/unidos_data?id=eq.${SUPABASE_ROW_ID}&select=payload`, {
         headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
       });
+      if(!res.ok) throw new Error('http '+res.status);
       const rows = await res.json();
-      if(rows && rows[0] && rows[0].payload) return rows[0].payload;
-    }catch(e){ console.error('supabase load error', e); }
-    return null;
+      if(rows && rows[0] && rows[0].payload){
+        try{ localStorage.setItem('unidos_data_cache', JSON.stringify(rows[0].payload)); }catch(e){}
+        return { ok:true, data: rows[0].payload };
+      }
+      return { ok:true, data:null }; // el servidor respondió bien: de verdad no hay datos todavía
+    }catch(e){
+      console.error('supabase load error', e);
+      return { ok:false, data:null }; // hubo un fallo de red: NO asumir que no hay datos
+    }
   }
   try{
     const raw = localStorage.getItem('unidos_data');
-    return raw ? JSON.parse(raw) : null;
-  }catch(e){ return null; }
+    return { ok:true, data: raw ? JSON.parse(raw) : null };
+  }catch(e){ return { ok:false, data:null }; }
 }
 async function saveShared(){
   if(SUPABASE_URL && SUPABASE_ANON_KEY){
     try{
-      await fetch(`${SUPABASE_URL}/rest/v1/unidos_data?on_conflict=id`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/unidos_data?on_conflict=id`, {
         method: 'POST',
         headers: {
           apikey: SUPABASE_ANON_KEY,
@@ -422,6 +429,8 @@ async function saveShared(){
         },
         body: JSON.stringify({ id: SUPABASE_ROW_ID, payload: state.data })
       });
+      if(!res.ok) throw new Error('http '+res.status);
+      try{ localStorage.setItem('unidos_data_cache', JSON.stringify(state.data)); }catch(e){}
     }catch(e){ console.error('supabase save error', e); }
     return;
   }
@@ -1106,11 +1115,26 @@ function openSettingsModal(){
 
 /* ---------------- boot ---------------- */
 async function boot(){
-  const shared = await loadShared();
-  state.data = shared || defaultData();
-  if(!state.data.moneda) state.data.moneda = 'PEN';
-  const migrado = migrateData(state.data);
-  if(!shared || migrado) await saveShared();
+  const resultado = await loadShared();
+  if(resultado.ok){
+    state.data = resultado.data || defaultData();
+    if(!state.data.moneda) state.data.moneda = 'PEN';
+    const migrado = migrateData(state.data);
+    // Solo escribimos en la base de datos compartida si de verdad no había
+    // fila todavía (primera vez) o si hubo que migrar datos viejos.
+    // Nunca se escribe aquí por culpa de un fallo de red.
+    if(!resultado.data || migrado) await saveShared();
+  } else {
+    // No se pudo conectar (por ejemplo, justo después de actualizar la app).
+    // Usamos la última copia guardada en este dispositivo y NO tocamos la
+    // base de datos compartida, para no arriesgarnos a borrar nada.
+    let cache = null;
+    try{ const raw = localStorage.getItem('unidos_data_cache'); cache = raw ? JSON.parse(raw) : null; }catch(e){}
+    state.data = cache || defaultData();
+    if(!state.data.moneda) state.data.moneda = 'PEN';
+    migrateData(state.data);
+    showOfflineBanner();
+  }
   state.perfil = await loadPerfil();
   render();
 
@@ -1123,12 +1147,30 @@ async function boot(){
       // No interrumpir si está escribiendo en cualquier campo de la pantalla principal
       const activo = document.activeElement;
       if(activo && ['INPUT','TEXTAREA','SELECT'].includes(activo.tagName)) return;
-      const fresh = await loadShared();
-      if(fresh) { state.data = fresh; if(migrateData(state.data)) await saveShared(); render(); }
+      const resultado = await loadShared();
+      if(resultado.ok && resultado.data){
+        state.data = resultado.data;
+        if(migrateData(state.data)) await saveShared();
+        render();
+      }
     }, 12000);
   }
 }
 boot();
+
+function showOfflineBanner(){
+  if (document.getElementById('offBanner')) return;
+  const el = document.createElement('div');
+  el.id = 'offBanner';
+  el.className = 'upd-banner';
+  el.style.background = 'var(--danger)';
+  el.innerHTML = `
+    <span>No se pudo conectar para sincronizar. Mostrando la última versión guardada en este dispositivo.</span>
+    <button class="upd-close" id="offClose">✕</button>
+  `;
+  document.body.appendChild(el);
+  document.getElementById('offClose').onclick = () => el.remove();
+}
 
 if ('serviceWorker' in navigator) {
   let actualizacionAceptada = false; // solo se vuelve true si el usuario toca "Actualizar"
