@@ -138,6 +138,16 @@
   .obj-bar-fill{height:100%;border-radius:4px;background:var(--gold);}
   .obj-split{display:flex;height:6px;border-radius:4px;overflow:hidden;margin-top:12px;background:var(--line);}
 
+  .sub-list{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);}
+  .sub-row{margin-bottom:9px;}
+  .sub-row:last-child{margin-bottom:0;}
+  .sub-row-top{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;}
+  .sub-row-top span:first-child{color:var(--ink);}
+  .sub-row-top .num{font-weight:700;}
+  .sub-row-track{height:4px;background:var(--line);border-radius:3px;overflow:hidden;}
+  .sub-row-fill{height:100%;border-radius:3px;opacity:.55;}
+  .sub-empty{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);font-size:12px;color:var(--ink-dim);}
+
   .empty{
     text-align:center;padding:34px 16px;color:var(--ink-dim);font-size:13.5px;
     border:1px dashed var(--line);border-radius:var(--radius);line-height:1.6;
@@ -248,7 +258,7 @@
   .cat-manage{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
   .cat-chip{
     background:var(--card);border:1px solid var(--line);border-radius:99px;
-    padding:6px 10px 6px 12px;font-size:12px;display:flex;align-items:center;gap:6px;
+    padding:6px 10px 6px 12px;font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;
   }
   .cat-chip button{background:none;border:none;color:var(--ink-dim);cursor:pointer;font-size:13px;padding:0;}
 
@@ -320,16 +330,43 @@ function defaultData(){
     moneda: 'PEN',
     objetivos: [
       { id:'boda', nombre:'Boda', icono:'💍', tint:'rose', meta:null,
-        categorias:['Local y Banquete','Fotografía y Video','Vestido y Traje','Flores y Decoración','Música y DJ','Invitaciones','Anillos','Transporte','Belleza','Trámites y Licencia','Detalles para invitados','Pastel','Imprevistos','Otros'] },
+        subobjetivos:['Local y Banquete','Fotografía y Video','Vestido y Traje','Flores y Decoración','Música y DJ','Invitaciones','Anillos','Transporte','Belleza','Trámites y Licencia','Detalles para invitados','Pastel','Imprevistos','Otros'].map(nombre=>({id:uid(),nombre,meta:null})) },
       { id:'luna-de-miel', nombre:'Luna de Miel', icono:'🌴', tint:'gold', meta:null,
-        categorias:['Vuelos','Alojamiento','Actividades y Tours','Comida','Transporte local','Compras','Seguro de viaje','Otros'] },
+        subobjetivos:['Vuelos','Alojamiento','Actividades y Tours','Comida','Transporte local','Compras','Seguro de viaje','Otros'].map(nombre=>({id:uid(),nombre,meta:null})) },
       { id:'casa', nombre:'Casa', icono:'🏠', tint:'indigo', meta:null,
-        categorias:['Muebles','Electrodomésticos','Remodelación','Servicios básicos','Decoración','Otros'] },
+        subobjetivos:['Muebles','Electrodomésticos','Remodelación','Servicios básicos','Decoración','Otros'].map(nombre=>({id:uid(),nombre,meta:null})) },
       { id:'ahorro-terreno', nombre:'Ahorro para Terreno', icono:'🌱', tint:'sage', meta:null,
-        categorias:['Aporte de ahorro','Trámites legales','Otros'] },
+        subobjetivos:['Aporte de ahorro','Trámites legales','Otros'].map(nombre=>({id:uid(),nombre,meta:null})) },
     ],
     gastos: []
   };
+}
+
+// Compatibilidad con datos guardados antes de que existieran los sub objetivos:
+// convierte "categorias" (strings sueltos) en "subobjetivos" (objetos con id y meta propia)
+// y reasigna cada gasto viejo (que tenía "categoria" como texto) a su nuevo subobjetivoId.
+function migrateData(data){
+  let changed = false;
+  data.objetivos.forEach(o=>{
+    if(!o.subobjetivos){
+      o.subobjetivos = (o.categorias||[]).map(nombre=>({id:uid(), nombre, meta:null}));
+      delete o.categorias;
+      changed = true;
+    }
+  });
+  data.gastos.forEach(g=>{
+    if(!g.subobjetivoId && g.categoria){
+      const obj = data.objetivos.find(o=>o.id===g.objetivoId);
+      if(obj){
+        let so = obj.subobjetivos.find(s=>s.nombre===g.categoria);
+        if(!so){ so = {id:uid(), nombre:g.categoria, meta:null}; obj.subobjetivos.push(so); }
+        g.subobjetivoId = so.id;
+      }
+      delete g.categoria;
+      changed = true;
+    }
+  });
+  return changed;
 }
 
 let state = {
@@ -402,14 +439,22 @@ async function savePerfil(){
 }
 
 function computeTotals(data){
-  const totals = { total:0, novio:0, novia:0, porObjetivo:{} };
-  data.objetivos.forEach(o=>{ totals.porObjetivo[o.id] = {total:0, novio:0, novia:0}; });
+  const totals = { total:0, novio:0, novia:0, porObjetivo:{}, porSubobjetivo:{} };
+  data.objetivos.forEach(o=>{
+    totals.porObjetivo[o.id] = {total:0, novio:0, novia:0};
+    (o.subobjetivos||[]).forEach(s=>{ totals.porSubobjetivo[s.id] = {total:0, novio:0, novia:0}; });
+  });
   data.gastos.forEach(g=>{
     totals.total += g.monto;
     totals[g.quien] = (totals[g.quien]||0) + g.monto;
     if(!totals.porObjetivo[g.objetivoId]) totals.porObjetivo[g.objetivoId] = {total:0,novio:0,novia:0};
     totals.porObjetivo[g.objetivoId].total += g.monto;
     totals.porObjetivo[g.objetivoId][g.quien] += g.monto;
+    if(g.subobjetivoId){
+      if(!totals.porSubobjetivo[g.subobjetivoId]) totals.porSubobjetivo[g.subobjetivoId] = {total:0,novio:0,novia:0};
+      totals.porSubobjetivo[g.subobjetivoId].total += g.monto;
+      totals.porSubobjetivo[g.subobjetivoId][g.quien] += g.monto;
+    }
   });
   return totals;
 }
@@ -561,7 +606,7 @@ function resumenView(){
         <div class="obj-icon" style="background:${tn.bg}">${o.icono}</div>
         <div>
           <div class="obj-name">${o.nombre}</div>
-          <div class="obj-cat-count">${o.categorias.length} categorías</div>
+          <div class="obj-cat-count">${o.subobjetivos.length} sub objetivos</div>
         </div>
         <div class="obj-total">
           <div class="amt num">${fmt(ot.total)}</div>
@@ -611,13 +656,29 @@ function objetivosView(){
     const pctNovio = ot.total>0 ? ot.novio/ot.total : 0.5;
     const pctNovia = ot.total>0 ? ot.novia/ot.total : 0.5;
     const pctMeta = o.meta ? Math.min(100, Math.round((ot.total/o.meta)*100)) : null;
+
+    const subRows = [...o.subobjetivos]
+      .sort((a,b)=> (t.porSubobjetivo[b.id]?.total||0) - (t.porSubobjetivo[a.id]?.total||0))
+      .map(s=>{
+        const st = t.porSubobjetivo[s.id] || {total:0};
+        const pct = ot.total>0 ? Math.round((st.total/ot.total)*100) : 0;
+        return `
+        <div class="sub-row">
+          <div class="sub-row-top">
+            <span>${s.nombre}</span>
+            <span class="num">${fmt(st.total)}${s.meta ? ` <span style="color:var(--ink-dim);font-weight:400;">/ ${fmt(s.meta)}</span>` : ''}</span>
+          </div>
+          <div class="sub-row-track"><div class="sub-row-fill" style="width:${pct}%;background:${tn.fg}"></div></div>
+        </div>`;
+      }).join('');
+
     return `
     <div class="obj-card" data-objopen="${o.id}">
       <div class="obj-top">
         <div class="obj-icon" style="background:${tn.bg}">${o.icono}</div>
         <div>
           <div class="obj-name">${o.nombre}</div>
-          <div class="obj-cat-count">${o.categorias.length} categorías · ${state.data.gastos.filter(g=>g.objetivoId===o.id).length} gastos</div>
+          <div class="obj-cat-count">${o.subobjetivos.length} sub objetivos · ${state.data.gastos.filter(g=>g.objetivoId===o.id).length} gastos</div>
         </div>
         <div class="obj-total">
           <div class="amt num">${fmt(ot.total)}</div>
@@ -629,6 +690,7 @@ function objetivosView(){
         <div style="width:${pctNovia*100}%;background:var(--rose)"></div>
       </div>
       ${o.meta ? `<div class="obj-bar-track"><div class="obj-bar-fill" style="width:${pctMeta}%"></div></div>` : ''}
+      ${subRows ? `<div class="sub-list">${subRows}</div>` : `<div class="sub-empty">Sin sub objetivos todavía — tócalo para agregar.</div>`}
     </div>`;
   }).join('');
 
@@ -641,6 +703,7 @@ function objetivosView(){
 /* ---------------- gastos tab ---------------- */
 function gastoRowHTML(g){
   const obj = state.data.objetivos.find(o=>o.id===g.objetivoId);
+  const sub = obj ? (obj.subobjetivos||[]).find(s=>s.id===g.subobjetivoId) : null;
   const tn = tint(obj ? obj.tint : 'indigo');
   const whoColor = g.quien==='novio' ? 'var(--indigo)' : 'var(--rose)';
   const whoBg = g.quien==='novio' ? 'var(--indigo-soft)' : 'var(--rose-soft)';
@@ -649,7 +712,7 @@ function gastoRowHTML(g){
   <div class="gasto-row">
     <div class="gasto-tag" style="background:${tn.fg}"></div>
     <div class="gasto-mid">
-      <div class="gasto-cat">${g.categoria}</div>
+      <div class="gasto-cat">${sub ? sub.nombre : '(sin sub objetivo)'}</div>
       ${g.descripcion ? `<div class="gasto-desc">${g.descripcion}</div>` : ''}
       <div class="gasto-meta">
         <span class="who-chip" style="background:${whoBg};color:${whoColor}">${whoName}</span>
@@ -670,7 +733,11 @@ function gastosView(){
   if(state.filterQuien!=='todos') list = list.filter(g=>g.quien===state.filterQuien);
   if(state.search.trim()) {
     const s = state.search.trim().toLowerCase();
-    list = list.filter(g => (g.categoria+' '+(g.descripcion||'')).toLowerCase().includes(s));
+    list = list.filter(g => {
+      const obj = state.data.objetivos.find(o=>o.id===g.objetivoId);
+      const sub = obj ? (obj.subobjetivos||[]).find(x=>x.id===g.subobjetivoId) : null;
+      return ((sub?sub.nombre:'')+' '+(g.descripcion||'')).toLowerCase().includes(s);
+    });
   }
   list.sort((a,b)=> b.fecha.localeCompare(a.fecha) || b.id.localeCompare(a.id));
 
@@ -744,9 +811,9 @@ function openGastoModal(prefillObjId){
       <select id="gObjetivo">${objs.map(o=>`<option value="${o.id}" ${o.id===defaultObj?'selected':''}>${o.icono} ${o.nombre}</option>`).join('')}</select>
     </div>
     <div class="field">
-      <label>Categoría</label>
-      <input id="gCategoria" list="catlist" placeholder="Elige o escribe una nueva">
-      <datalist id="catlist"></datalist>
+      <label>Sub objetivo</label>
+      <select id="gCategoria"></select>
+      <input id="gNuevoSub" placeholder="Nombre del nuevo sub objetivo" style="margin-top:8px;display:none;">
     </div>
     <div class="field-row">
       <div class="field">
@@ -783,22 +850,34 @@ function openGastoModal(prefillObjId){
 
   function refreshCats(){
     const o = state.data.objetivos.find(x=>x.id===$('#gObjetivo',overlay).value);
-    $('#catlist',overlay).innerHTML = o.categorias.map(c=>`<option value="${c}">`).join('');
+    const opciones = o.subobjetivos.map(s=>`<option value="${s.id}">${s.nombre}</option>`).join('');
+    $('#gCategoria',overlay).innerHTML = opciones + `<option value="__nuevo__">+ Nuevo sub objetivo</option>`;
+    $('#gNuevoSub',overlay).style.display = 'none';
+    $('#gNuevoSub',overlay).value = '';
   }
   refreshCats();
   $('#gObjetivo',overlay).onchange = refreshCats;
+  $('#gCategoria',overlay).onchange = ()=>{
+    $('#gNuevoSub',overlay).style.display = $('#gCategoria',overlay).value==='__nuevo__' ? 'block' : 'none';
+  };
 
   $('#saveGasto',overlay).onclick = async ()=>{
     const objetivoId = $('#gObjetivo',overlay).value;
-    const categoria = $('#gCategoria',overlay).value.trim();
     const monto = parseFloat($('#gMonto',overlay).value);
     const fecha = $('#gFecha',overlay).value || todayISO();
     const descripcion = $('#gDesc',overlay).value.trim();
-    if(!categoria){ alert('Escribe o elige una categoría.'); return; }
     if(!monto || monto<=0){ alert('Ingresa un monto válido.'); return; }
     const obj = state.data.objetivos.find(o=>o.id===objetivoId);
-    if(obj && !obj.categorias.includes(categoria)) obj.categorias.push(categoria);
-    state.data.gastos.push({ id:uid(), objetivoId, categoria, monto, fecha, descripcion, quien:who });
+    let subobjetivoId = $('#gCategoria',overlay).value;
+    if(subobjetivoId==='__nuevo__'){
+      const nombre = $('#gNuevoSub',overlay).value.trim();
+      if(!nombre){ alert('Escribe el nombre del nuevo sub objetivo.'); return; }
+      const nuevo = { id:uid(), nombre, meta:null };
+      obj.subobjetivos.push(nuevo);
+      subobjetivoId = nuevo.id;
+    }
+    if(!subobjetivoId){ alert('Elige un sub objetivo.'); return; }
+    state.data.gastos.push({ id:uid(), objetivoId, subobjetivoId, monto, fecha, descripcion, quien:who });
     await saveShared();
     overlay.remove();
     render();
@@ -808,9 +887,10 @@ function openGastoModal(prefillObjId){
 /* ---------------- modal: objetivo (crear/editar) ---------------- */
 function openObjetivoModal(objId){
   const isNew = !objId;
-  const obj = isNew ? { id:null, nombre:'', icono:'💍', tint:'rose', meta:null, categorias:[] } : state.data.objetivos.find(o=>o.id===objId);
+  const obj = isNew ? { id:null, nombre:'', icono:'💍', tint:'rose', meta:null, subobjetivos:[] } : state.data.objetivos.find(o=>o.id===objId);
   let icono = obj.icono, tintSel = obj.tint;
-  let cats = [...obj.categorias];
+  let subs = obj.subobjetivos.map(s=>({...s}));
+  let editingId = null; // si se está editando un sub objetivo existente (clic en su chip)
 
   const overlay = document.createElement('div');
   overlay.className='overlay';
@@ -839,14 +919,19 @@ function openObjetivoModal(objId){
       <input id="oMeta" type="number" min="0" step="0.01" value="${obj.meta || ''}" placeholder="Ej. 15000">
     </div>
     <div class="field">
-      <label>Categorías de gasto</label>
+      <label>Sub objetivos <span style="font-weight:400;color:var(--ink-dim);">(la suma de todos forma el total de este objetivo)</span></label>
       <div class="cat-manage" id="catManage">
-        ${cats.map(c=>`<span class="cat-chip">${c}<button data-rmcat="${c}">✕</button></span>`).join('')}
+        ${subs.map(s=>`<span class="cat-chip" data-editsub="${s.id}">${s.nombre}${s.meta ? ` · ${fmt(s.meta)}` : ''}<button data-rmcat="${s.id}">✕</button></span>`).join('')}
       </div>
-      <div style="display:flex;gap:8px;margin-top:8px;">
-        <input id="newCatInput" placeholder="Agregar categoría" style="flex:1;padding:9px 12px;border:1px solid var(--line);border-radius:99px;font-size:12.5px;">
-        <button type="button" id="addCatBtn" class="btn-ghost" style="width:auto;margin:0;padding:9px 14px;">Agregar</button>
+      <div class="field-row" style="margin-top:8px;">
+        <div class="field" style="margin-bottom:0;">
+          <input id="newCatInput" placeholder="Nombre del sub objetivo">
+        </div>
+        <div class="field" style="margin-bottom:0;max-width:120px;">
+          <input id="newCatMeta" type="number" min="0" step="0.01" placeholder="Meta (opc.)">
+        </div>
       </div>
+      <button type="button" id="addCatBtn" class="btn-ghost" style="margin-top:8px;">Agregar sub objetivo</button>
     </div>
     <button class="btn-primary" id="saveObj">${isNew ? 'Crear objetivo' : 'Guardar cambios'}</button>
     ${!isNew ? `<button class="btn-ghost" id="delObj">Eliminar objetivo</button>` : ''}
@@ -862,27 +947,53 @@ function openObjetivoModal(objId){
     b.onclick = ()=>{ tintSel=b.getAttribute('data-t'); $$('#tintPick .sw',overlay).forEach(x=>x.classList.remove('on')); b.classList.add('on'); };
   });
   function renderCats(){
-    $('#catManage',overlay).innerHTML = cats.map(c=>`<span class="cat-chip">${c}<button data-rmcat="${c}">✕</button></span>`).join('') || `<span style="font-size:12px;color:var(--ink-dim)">Sin categorías todavía</span>`;
+    $('#catManage',overlay).innerHTML = subs.map(s=>`<span class="cat-chip" data-editsub="${s.id}">${s.nombre}${s.meta ? ` · ${fmt(s.meta)}` : ''}<button data-rmcat="${s.id}">✕</button></span>`).join('') || `<span style="font-size:12px;color:var(--ink-dim)">Sin sub objetivos todavía</span>`;
     $$('[data-rmcat]',overlay).forEach(b=>{
-      b.onclick = ()=>{ cats = cats.filter(c=>c!==b.getAttribute('data-rmcat')); renderCats(); };
+      b.onclick = (ev)=>{
+        ev.stopPropagation();
+        subs = subs.filter(s=>s.id!==b.getAttribute('data-rmcat'));
+        renderCats();
+      };
+    });
+    $$('[data-editsub]',overlay).forEach(chip=>{
+      chip.onclick = ()=>{
+        const s = subs.find(x=>x.id===chip.getAttribute('data-editsub'));
+        if(!s) return;
+        editingId = s.id;
+        $('#newCatInput',overlay).value = s.nombre;
+        $('#newCatMeta',overlay).value = s.meta || '';
+        $('#newCatInput',overlay).focus();
+      };
     });
   }
   renderCats();
   $('#addCatBtn',overlay).onclick = ()=>{
-    const v = $('#newCatInput',overlay).value.trim();
-    if(v && !cats.includes(v)){ cats.push(v); $('#newCatInput',overlay).value=''; renderCats(); }
+    const nombre = $('#newCatInput',overlay).value.trim();
+    const metaVal = parseFloat($('#newCatMeta',overlay).value);
+    const meta = metaVal>0 ? metaVal : null;
+    if(!nombre) return;
+    if(editingId){
+      const s = subs.find(x=>x.id===editingId);
+      if(s){ s.nombre=nombre; s.meta=meta; }
+      editingId = null;
+    } else {
+      subs.push({ id:uid(), nombre, meta });
+    }
+    $('#newCatInput',overlay).value='';
+    $('#newCatMeta',overlay).value='';
+    renderCats();
   };
 
   $('#saveObj',overlay).onclick = async ()=>{
     const nombre = $('#oNombre',overlay).value.trim();
     if(!nombre){ alert('Ponle un nombre al objetivo.'); return; }
-    if(cats.length===0){ alert('Agrega al menos una categoría de gasto.'); return; }
+    if(subs.length===0){ alert('Agrega al menos un sub objetivo.'); return; }
     const metaVal = parseFloat($('#oMeta',overlay).value);
     const meta = metaVal>0 ? metaVal : null;
     if(isNew){
-      state.data.objetivos.push({ id:uid(), nombre, icono, tint:tintSel, meta, categorias:cats });
+      state.data.objetivos.push({ id:uid(), nombre, icono, tint:tintSel, meta, subobjetivos:subs });
     } else {
-      obj.nombre=nombre; obj.icono=icono; obj.tint=tintSel; obj.meta=meta; obj.categorias=cats;
+      obj.nombre=nombre; obj.icono=icono; obj.tint=tintSel; obj.meta=meta; obj.subobjetivos=subs;
     }
     await saveShared();
     overlay.remove();
@@ -977,7 +1088,8 @@ async function boot(){
   const shared = await loadShared();
   state.data = shared || defaultData();
   if(!state.data.moneda) state.data.moneda = 'PEN';
-  if(!shared) await saveShared();
+  const migrado = migrateData(state.data);
+  if(!shared || migrado) await saveShared();
   state.perfil = await loadPerfil();
   render();
 
@@ -991,7 +1103,7 @@ async function boot(){
       const activo = document.activeElement;
       if(activo && ['INPUT','TEXTAREA','SELECT'].includes(activo.tagName)) return;
       const fresh = await loadShared();
-      if(fresh) { state.data = fresh; render(); }
+      if(fresh) { state.data = fresh; if(migrateData(state.data)) await saveShared(); render(); }
     }, 12000);
   }
 }
