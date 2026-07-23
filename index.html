@@ -233,6 +233,7 @@
   .xls-rownum{color:var(--ink-dim);text-align:center;background:var(--paper);}
   .xls-col-name{background:var(--rose-soft);}
   .xls-col-grupo{background:var(--gold-soft);}
+  .xls-col-mesa{background:var(--sage-soft);}
   .xls-row-start td{box-shadow:inset 0 2px 0 var(--indigo), inset 0 -2px 0 var(--indigo);}
 
   /* ---------- bottom nav ---------- */
@@ -360,7 +361,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v14";
+const APP_VERSION = "v15";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -989,6 +990,16 @@ function normNombre(s){
     .replace(/\s+/g,' ');
 }
 
+function guessMesaCol(raw){
+  for(let r=0;r<Math.min(8,raw.length);r++){
+    for(let c=0;c<raw[r].length;c++){
+      const txt = String(raw[r][c]||'').trim().toLowerCase();
+      if(txt.length<=12 && /^mesas?( n°| numero| número| #)?$/.test(txt)) return c;
+    }
+  }
+  return -1;
+}
+
 function guessNameCol(raw){
   for(let r=0;r<Math.min(8,raw.length);r++){
     for(let c=0;c<raw[r].length;c++){
@@ -1013,6 +1024,7 @@ function openImportPreviewModal(raw){
   const guess = guessNameCol(raw);
   let nameCol = guess.col;
   let grupoCol = -1;
+  let mesaCol = guessMesaCol(raw);
   let startRow = guess.headerRow>=0 ? guess.headerRow+1 : 0;
 
   const overlay = document.createElement('div');
@@ -1032,6 +1044,10 @@ function openImportPreviewModal(raw){
         <label>Columna de grupo (opcional)</label>
         <select id="pickGrupoCol"></select>
       </div>
+    </div>
+    <div class="field">
+      <label>Columna de mesa (opcional) <span style="font-weight:400;color:var(--ink-dim);">— si tu Excel ya trae el número de mesa, los invitados nuevos se sientan solos ahí</span></label>
+      <select id="pickMesaCol"></select>
     </div>
     <div class="field">
       <label>¿En qué fila empiezan los invitados?</label>
@@ -1057,17 +1073,18 @@ function openImportPreviewModal(raw){
   };
   $('#pickNameCol',overlay).innerHTML = colOptsHtml(nameCol, false);
   $('#pickGrupoCol',overlay).innerHTML = colOptsHtml(grupoCol, true);
+  $('#pickMesaCol',overlay).innerHTML = colOptsHtml(mesaCol, true);
 
   function renderPreview(){
     const startIdx = Math.max(1, parseInt($('#pickStartRow',overlay).value)||1) - 1;
     const rows = raw.slice(0, 8);
     let html = '<table class="xls-table"><thead><tr><th></th>';
-    for(let c=0;c<maxCols;c++) html += `<th class="${c===nameCol?'xls-col-name':''}${c===grupoCol?' xls-col-grupo':''}">${colLetter(c)}</th>`;
+    for(let c=0;c<maxCols;c++) html += `<th class="${c===nameCol?'xls-col-name':''}${c===grupoCol?' xls-col-grupo':''}${c===mesaCol?' xls-col-mesa':''}">${colLetter(c)}</th>`;
     html += '</tr></thead><tbody>';
     rows.forEach((r,ri)=>{
       html += `<tr class="${ri===startIdx?'xls-row-start':''}"><td class="xls-rownum">${ri+1}</td>`;
       for(let c=0;c<maxCols;c++){
-        html += `<td class="${c===nameCol?'xls-col-name':''}${c===grupoCol?' xls-col-grupo':''}">${String(r[c]??'').slice(0,16)}</td>`;
+        html += `<td class="${c===nameCol?'xls-col-name':''}${c===grupoCol?' xls-col-grupo':''}${c===mesaCol?' xls-col-mesa':''}">${String(r[c]??'').slice(0,16)}</td>`;
       }
       html += '</tr>';
     });
@@ -1076,39 +1093,55 @@ function openImportPreviewModal(raw){
   }
   function updateCount(){
     const sr = Math.max(1, parseInt($('#pickStartRow',overlay).value)||1) - 1;
-    let nuevos = 0, existentes = 0;
+    let nuevos = 0, existentes = 0, conMesa = 0;
     for(let r=sr;r<raw.length;r++){
       const nombre = String(raw[r][nameCol]??'').trim();
       if(!nombre) continue;
       const yaExiste = state.data.invitados.some(i=>normNombre(i.nombre)===normNombre(nombre));
       if(yaExiste) existentes++; else nuevos++;
+      if(mesaCol>=0){
+        const num = parseInt(raw[r][mesaCol]);
+        if(!isNaN(num) && state.data.mesas.some(m=>m.numero===num)) conMesa++;
+      }
     }
-    $('#importCount',overlay).textContent = existentes>0
+    let txt = existentes>0
       ? `${nuevos} invitado(s) nuevo(s) · ${existentes} ya existían (se actualizan sin duplicar ni mover de mesa)`
       : `Se importarán ${nuevos} invitado(s) nuevo(s).`;
+    if(mesaCol>=0) txt += ` · ${conMesa} con mesa reconocida en el Excel`;
+    $('#importCount',overlay).textContent = txt;
   }
   renderPreview(); updateCount();
 
   $('#pickNameCol',overlay).onchange = (e)=>{ nameCol=parseInt(e.target.value); renderPreview(); updateCount(); };
   $('#pickGrupoCol',overlay).onchange = (e)=>{ grupoCol=parseInt(e.target.value); renderPreview(); updateCount(); };
+  $('#pickMesaCol',overlay).onchange = (e)=>{ mesaCol=parseInt(e.target.value); renderPreview(); updateCount(); };
   $('#pickStartRow',overlay).oninput = ()=>{ renderPreview(); updateCount(); };
 
   $('#doImportBtn',overlay).onclick = async ()=>{
     const sr = Math.max(1, parseInt($('#pickStartRow',overlay).value)||1) - 1;
-    let agregados = 0, actualizados = 0;
+    let agregados = 0, actualizados = 0, sentados = 0;
     for(let r=sr;r<raw.length;r++){
       const nombre = String(raw[r][nameCol] ?? '').trim();
       if(!nombre) continue;
       const grupo = grupoCol>=0 ? String(raw[r][grupoCol] ?? '').trim() : '';
+      let mesaIdDelExcel = null;
+      if(mesaCol>=0){
+        const num = parseInt(raw[r][mesaCol]);
+        const mesaEncontrada = !isNaN(num) ? state.data.mesas.find(m=>m.numero===num) : null;
+        mesaIdDelExcel = mesaEncontrada ? mesaEncontrada.id : null;
+      }
       const existente = state.data.invitados.find(i=>normNombre(i.nombre)===normNombre(nombre));
       if(existente){
-        // Ya existía: actualizamos nombre/grupo por si cambiaron, pero
-        // NUNCA tocamos mesaId, así conserva la mesa donde ya estaba sentado.
+        // Ya existía: actualizamos nombre/grupo por si cambiaron.
         existente.nombre = nombre;
         if(grupo) existente.grupo = grupo;
+        // Solo le ponemos mesa del Excel si todavía NO tenía ninguna asignada;
+        // si ya estaba sentado manualmente, esa asignación se respeta siempre.
+        if(!existente.mesaId && mesaIdDelExcel){ existente.mesaId = mesaIdDelExcel; sentados++; }
         actualizados++;
       } else {
-        state.data.invitados.push({ id:uid(), nombre, grupo, mesaId:null });
+        state.data.invitados.push({ id:uid(), nombre, grupo, mesaId:mesaIdDelExcel });
+        if(mesaIdDelExcel) sentados++;
         agregados++;
       }
     }
@@ -1117,8 +1150,8 @@ function openImportPreviewModal(raw){
     overlay.remove();
     render();
     alert(actualizados>0
-      ? `${agregados} invitado(s) nuevo(s) agregados. ${actualizados} ya existían y se conservó su mesa asignada.`
-      : `Se importaron ${agregados} invitado(s).`);
+      ? `${agregados} invitado(s) nuevo(s) agregados (${sentados} ya con mesa asignada del Excel). ${actualizados} ya existían y se conservó su mesa asignada.`
+      : `Se importaron ${agregados} invitado(s)${sentados>0?`, ${sentados} de ellos ya sentados en su mesa`:''}.`);
   };
 }
 
