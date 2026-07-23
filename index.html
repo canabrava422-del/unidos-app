@@ -218,6 +218,13 @@
     background:var(--rose-soft);color:var(--rose);
   }
   .inv-mesa.inv-sinmesa{background:var(--line);color:var(--ink-dim);}
+  .inv-check{
+    width:20px;height:20px;border-radius:6px;border:2px solid var(--line);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .inv-check.on{background:var(--indigo);border-color:var(--indigo);}
+  .inv-check.on::after{content:'✓';color:#fff;font-size:12px;font-weight:800;}
+  .inv-row-selected{border-color:var(--indigo);background:var(--indigo-soft);}
 
   .xls-preview{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--card);}
   .xls-table{border-collapse:collapse;font-size:11px;white-space:nowrap;}
@@ -353,7 +360,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v13";
+const APP_VERSION = "v14";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -448,6 +455,8 @@ let state = {
   search: '',
   mesasSub: 'plano',
   invitadosSearch: '',
+  invitadosSelectMode: false,
+  invitadosSelected: new Set(),
 };
 
 /*
@@ -903,22 +912,32 @@ function planoView(){
   `;
 }
 
-function invitadosView(){
+function getFilteredInvitados(){
   const s = state.invitadosSearch.trim().toLowerCase();
   let list = [...state.data.invitados];
   if(s) list = list.filter(i => i.nombre.toLowerCase().includes(s) || (i.grupo||'').toLowerCase().includes(s));
   list.sort((a,b)=> a.nombre.localeCompare(b.nombre));
+  return list;
+}
+
+function invitadosView(){
+  const list = getFilteredInvitados();
   const mesasById = Object.fromEntries(state.data.mesas.map(m=>[m.id,m]));
+  const selMode = state.invitadosSelectMode;
+  const selected = state.invitadosSelected;
+  const todosSeleccionados = list.length>0 && list.every(i=>selected.has(i.id));
 
   const rows = list.map(i=>{
     const mesa = i.mesaId ? mesasById[i.mesaId] : null;
+    const marcado = selected.has(i.id);
     return `
-    <div class="inv-row" data-invopen="${i.id}">
+    <div class="inv-row ${selMode && marcado ? 'inv-row-selected' : ''}" data-invopen="${i.id}">
+      ${selMode ? `<div class="inv-check ${marcado?'on':''}"></div>` : ''}
       <div class="inv-mid">
         <div class="inv-nombre">${i.nombre}</div>
         ${i.grupo ? `<div class="inv-grupo">${i.grupo}</div>` : ''}
       </div>
-      <div class="inv-mesa ${mesa?'':'inv-sinmesa'}">${mesa ? `Mesa ${mesa.numero}` : 'Sin mesa'}</div>
+      ${!selMode ? `<div class="inv-mesa ${mesa?'':'inv-sinmesa'}">${mesa ? `Mesa ${mesa.numero}` : 'Sin mesa'}</div>` : ''}
     </div>`;
   }).join('');
 
@@ -926,12 +945,19 @@ function invitadosView(){
   <div class="filters">
     <input id="fInvSearch" placeholder="Buscar invitado..." value="${state.invitadosSearch}" style="flex:1;">
   </div>
-  <div style="display:flex;gap:8px;margin-bottom:14px;">
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
     <button class="btn-ghost" id="importXlsBtn" style="margin:0;flex:1;">📥 Importar desde Excel</button>
+    <button class="btn-ghost" id="selectModeBtn" style="margin:0;flex:1;">${selMode ? 'Cancelar selección' : '☑️ Seleccionar'}</button>
   </div>
   <input type="file" id="xlsInput" accept=".xlsx,.xls,.csv" style="display:none;">
+  ${selMode ? `
+  <div style="display:flex;gap:8px;margin-bottom:14px;">
+    <button class="btn-ghost" id="selectAllBtn" style="margin:0;flex:1;">${todosSeleccionados ? 'Deseleccionar todos' : 'Seleccionar todos'}</button>
+    <button class="btn-ghost" id="deleteSelectedBtn" style="margin:0;flex:1;color:var(--danger);border-color:var(--danger);" ${selected.size===0?'disabled':''}>Eliminar (${selected.size})</button>
+  </div>` : ''}
   <div style="font-size:12px;color:var(--ink-dim);margin:-6px 0 14px;">${state.data.invitados.length} invitados en total</div>
   ${rows || `<div class="empty">Todavía no hay invitados. Impórtalos desde Excel o agrégalos con el botón "+".</div>`}
+  ${!selMode && state.data.invitados.length>0 ? `<button class="btn-ghost" id="wipeAllBtn" style="margin-top:16px;color:var(--danger);border-color:var(--danger);">🗑 Vaciar toda la lista de invitados</button>` : ''}
   `;
 }
 
@@ -1276,9 +1302,54 @@ function bindMain(){
         if(file) handleExcelFile(file);
         e.target.value = '';
       };
-      $$('[data-invopen]').forEach(el=>{
-        el.onclick = ()=> openInvitadoModal(el.getAttribute('data-invopen'));
-      });
+      $('#selectModeBtn').onclick = ()=>{
+        state.invitadosSelectMode = !state.invitadosSelectMode;
+        state.invitadosSelected = new Set();
+        render();
+      };
+      if(state.invitadosSelectMode){
+        $('#selectAllBtn').onclick = ()=>{
+          const list = getFilteredInvitados();
+          const todos = list.length>0 && list.every(i=>state.invitadosSelected.has(i.id));
+          if(todos) state.invitadosSelected = new Set();
+          else state.invitadosSelected = new Set(list.map(i=>i.id));
+          render();
+        };
+        $('#deleteSelectedBtn').onclick = async ()=>{
+          const n = state.invitadosSelected.size;
+          if(n===0) return;
+          if(confirm(`¿Eliminar ${n} invitado(s) seleccionados? Esta acción no se puede deshacer.`)){
+            state.data.invitados = state.data.invitados.filter(i=>!state.invitadosSelected.has(i.id));
+            state.invitadosSelected = new Set();
+            state.invitadosSelectMode = false;
+            await saveShared();
+            render();
+          }
+        };
+        $$('[data-invopen]').forEach(el=>{
+          el.onclick = ()=>{
+            const id = el.getAttribute('data-invopen');
+            if(state.invitadosSelected.has(id)) state.invitadosSelected.delete(id);
+            else state.invitadosSelected.add(id);
+            render();
+          };
+        });
+      } else {
+        $$('[data-invopen]').forEach(el=>{
+          el.onclick = ()=> openInvitadoModal(el.getAttribute('data-invopen'));
+        });
+      }
+      const wipeBtn = $('#wipeAllBtn');
+      if(wipeBtn) wipeBtn.onclick = async ()=>{
+        const n = state.data.invitados.length;
+        if(confirm(`¿Seguro que quieres borrar TODOS los ${n} invitados de la lista? Las mesas quedarán vacías. Esta acción no se puede deshacer.`)){
+          if(confirm('Confirma una vez más: se va a vaciar por completo la lista de invitados.')){
+            state.data.invitados = [];
+            await saveShared();
+            render();
+          }
+        }
+      };
     }
   }
   $$('[data-delgasto]').forEach(el=>{
