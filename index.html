@@ -199,30 +199,22 @@
   }
   .mesa-svg-zoom-btn{position:absolute;top:20px;right:20px;}
 
-  /* ---------- visor con zoom ---------- */
+  /* ---------- visor de pantalla completa ---------- */
   .zoom-overlay{
-    position:fixed;inset:0;background:rgba(20,18,15,.92);z-index:90;
+    position:fixed;inset:0;background:var(--paper);z-index:90;
     display:flex;flex-direction:column;
   }
   .zoom-header{
     display:flex;align-items:center;justify-content:space-between;
-    padding:calc(14px + env(safe-area-inset-top)) 18px 14px;color:#fff;font-weight:700;font-size:15px;
+    padding:calc(14px + env(safe-area-inset-top)) 18px 14px;color:var(--ink);font-weight:700;font-size:15px;
+    border-bottom:1px solid var(--line);flex-shrink:0;
   }
-  .zoom-header button{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;}
+  .zoom-header button{background:none;border:none;color:var(--ink);font-size:22px;cursor:pointer;}
   .zoom-scroll{
     flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;
-    touch-action:pan-x pan-y;-webkit-overflow-scrolling:touch;
+    padding:20px;-webkit-overflow-scrolling:touch;
   }
-  .zoom-inner{transition:width .12s ease, height .12s ease;flex-shrink:0;}
-  .zoom-controls{
-    display:flex;align-items:center;justify-content:center;gap:16px;
-    padding:14px 18px calc(14px + env(safe-area-inset-bottom));
-  }
-  .zoom-controls button{
-    width:44px;height:44px;border-radius:50%;background:#fff;border:none;
-    font-size:20px;font-weight:800;color:var(--ink);cursor:pointer;
-  }
-  .zoom-controls span{color:#fff;font-size:13px;font-weight:700;min-width:48px;text-align:center;}
+  .zoom-inner-full{width:100%;max-width:560px;}
 
   .inv-row{
     background:var(--card);border:1px solid var(--line);border-radius:14px;
@@ -379,7 +371,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v20";
+const APP_VERSION = "v21";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -907,7 +899,7 @@ function planoView(){
 
   return `
   <div class="plano-wrap">
-    <button class="mesa-zoom-btn plano-zoom-btn" id="planoZoomBtn" aria-label="Ampliar plano completo">🔍</button>
+    <button class="mesa-zoom-btn plano-zoom-btn" id="planoZoomBtn" aria-label="Ver plano en pantalla completa">⛶</button>
     ${floorPlanSVG()}
   </div>
   <p style="text-align:center;font-size:11px;color:var(--ink-dim);margin:8px 0 0;">Toca cualquier mesa para ver y editar quién está sentado ahí.</p>
@@ -1329,8 +1321,7 @@ function floorPlanSVG(){
   return `<svg viewBox="0 0 ${width} ${height}" style="width:100%;height:auto;display:block;">${contenido}</svg>`;
 }
 
-function openZoomViewer(titulo, svgHtml, baseSize){
-  let scale = 1.4;
+function openFullscreenViewer(titulo, svgHtml){
   const overlay = document.createElement('div');
   overlay.className = 'zoom-overlay';
   overlay.innerHTML = `
@@ -1339,59 +1330,21 @@ function openZoomViewer(titulo, svgHtml, baseSize){
       <button id="zoomCloseBtn">✕</button>
     </div>
     <div class="zoom-scroll" id="zoomScroll">
-      <div class="zoom-inner" id="zoomInner" style="width:${baseSize*scale}px;height:${baseSize*scale}px;">
-        ${svgHtml}
-      </div>
-    </div>
-    <div class="zoom-controls">
-      <button id="zoomOutBtn">−</button>
-      <span id="zoomLevel">${Math.round(scale*100)}%</span>
-      <button id="zoomInBtn">+</button>
+      <div class="zoom-inner-full">${svgHtml}</div>
     </div>
   `;
   document.body.appendChild(overlay);
-
-  const inner = $('#zoomInner',overlay);
-  const scrollEl = $('#zoomScroll',overlay);
-  function applyZoom(){
-    scale = Math.max(0.5, Math.min(5, scale));
-    inner.style.width = (baseSize*scale)+'px';
-    inner.style.height = (baseSize*scale)+'px';
-    $('#zoomLevel',overlay).textContent = Math.round(scale*100)+'%';
-  }
   $('#zoomCloseBtn',overlay).onclick = ()=> overlay.remove();
-  $('#zoomInBtn',overlay).onclick = ()=>{ scale += 0.3; applyZoom(); };
-  $('#zoomOutBtn',overlay).onclick = ()=>{ scale -= 0.3; applyZoom(); };
-
-  let pinchDist = null, pinchStartScale = 1;
-  const dist = (t1,t2)=> Math.hypot(t1.clientX-t2.clientX, t1.clientY-t2.clientY);
-  scrollEl.addEventListener('touchstart', (e)=>{
-    if(e.touches.length===2){ pinchDist = dist(e.touches[0],e.touches[1]); pinchStartScale = scale; }
-  }, {passive:true});
-  scrollEl.addEventListener('touchmove', (e)=>{
-    if(e.touches.length===2 && pinchDist){
-      const d = dist(e.touches[0],e.touches[1]);
-      scale = pinchStartScale * (d/pinchDist);
-      applyZoom();
-      e.preventDefault();
-    }
-  }, {passive:false});
-  scrollEl.addEventListener('touchend', ()=>{ pinchDist = null; });
-
-  requestAnimationFrame(()=>{
-    scrollEl.scrollLeft = (scrollEl.scrollWidth - scrollEl.clientWidth)/2;
-    scrollEl.scrollTop = (scrollEl.scrollHeight - scrollEl.clientHeight)/2;
-  });
 }
 
 function openMesaZoom(mesaId){
   const m = state.data.mesas.find(x=>x.id===mesaId);
   const ocupantes = state.data.invitados.filter(i=>i.mesaId===m.id);
-  openZoomViewer(`Mesa ${m.numero} · ${escapeHtml(m.nombre)}`, mesaSVG(m, ocupantes), 340);
+  openFullscreenViewer(`Mesa ${m.numero} · ${escapeHtml(m.nombre)}`, mesaSVG(m, ocupantes));
 }
 
 function openPlanoZoom(){
-  openZoomViewer('Plano de mesas', floorPlanSVG(), 820);
+  openFullscreenViewer('Plano de mesas', floorPlanSVG());
 }
 
 function openMesaModal(mesaId){
@@ -1421,7 +1374,7 @@ function openMesaModal(mesaId){
     <button class="btn-ghost" id="saveMesaBtn" style="margin-top:0;">Guardar cambios de la mesa</button>
 
     <div class="mesa-svg-wrap">
-      <button class="mesa-zoom-btn mesa-svg-zoom-btn" id="mesaModalZoomBtn" aria-label="Ampliar">🔍</button>
+      <button class="mesa-zoom-btn mesa-svg-zoom-btn" id="mesaModalZoomBtn" aria-label="Ver en pantalla completa">⛶</button>
       ${mesaSVG(m, ocupantes)}
     </div>
     <p style="text-align:center;font-size:11px;color:var(--ink-dim);margin:8px 0 0;">Toca un asiento ocupado para quitar a esa persona.</p>
