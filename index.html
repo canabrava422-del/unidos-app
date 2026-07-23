@@ -219,6 +219,15 @@
   }
   .inv-mesa.inv-sinmesa{background:var(--line);color:var(--ink-dim);}
 
+  .xls-preview{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--card);}
+  .xls-table{border-collapse:collapse;font-size:11px;white-space:nowrap;}
+  .xls-table th, .xls-table td{padding:6px 8px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);}
+  .xls-table th{background:var(--paper);color:var(--ink-dim);font-weight:700;position:sticky;top:0;}
+  .xls-rownum{color:var(--ink-dim);text-align:center;background:var(--paper);}
+  .xls-col-name{background:var(--rose-soft);}
+  .xls-col-grupo{background:var(--gold-soft);}
+  .xls-row-start td{box-shadow:inset 0 2px 0 var(--indigo), inset 0 -2px 0 var(--indigo);}
+
   /* ---------- bottom nav ---------- */
   nav.tabbar{
     position:fixed;bottom:0;left:50%;transform:translateX(-50%);
@@ -932,34 +941,130 @@ async function handleExcelFile(file){
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const raw = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'' });
     if(!raw.length){ alert('El archivo está vacío.'); return; }
-
-    let startIdx = 0, nameCol = 0, grupoCol = -1;
-    const primera = raw[0].map(c=>String(c).toLowerCase());
-    const pareceHeader = primera.some(c=>/nombre|invitado|guest|name/.test(c));
-    if(pareceHeader){
-      nameCol = primera.findIndex(c=>/nombre|invitado|guest|name/.test(c));
-      if(nameCol<0) nameCol = 0;
-      grupoCol = primera.findIndex(c=>/grupo|familia|group|mesa/.test(c));
-      startIdx = 1;
-    }
-
-    let agregados = 0;
-    for(let r=startIdx; r<raw.length; r++){
-      const row = raw[r];
-      const nombre = String(row[nameCol] ?? '').trim();
-      if(!nombre) continue;
-      const grupo = grupoCol>=0 ? String(row[grupoCol] ?? '').trim() : '';
-      state.data.invitados.push({ id:uid(), nombre, grupo, mesaId:null });
-      agregados++;
-    }
-    if(agregados===0){ alert('No se encontraron nombres para importar. Revisa que la primera columna tenga los nombres de los invitados.'); return; }
-    await saveShared();
-    render();
-    alert(`Se importaron ${agregados} invitado(s).`);
+    openImportPreviewModal(raw);
   }catch(e){
     console.error(e);
     alert('No se pudo leer el archivo. Asegúrate de que sea un Excel (.xlsx) o CSV válido.');
   }
+}
+
+function colLetter(i){
+  let s = '', n = i+1;
+  while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); }
+  return s;
+}
+
+function guessNameCol(raw){
+  for(let r=0;r<Math.min(8,raw.length);r++){
+    for(let c=0;c<raw[r].length;c++){
+      const txt = String(raw[r][c]||'').trim().toLowerCase();
+      if(txt.length<=18 && /^(nombre|nombres|invitado|invitados|guest|name)s?( completo)?$/.test(txt)){
+        return { col:c, headerRow:r };
+      }
+    }
+  }
+  const maxCols = Math.max(...raw.map(r=>r.length));
+  let best=0, bestCount=-1;
+  for(let c=0;c<maxCols;c++){
+    let count=0;
+    raw.forEach(r=>{ const v=r[c]; if(typeof v==='string' && v.trim().length>2 && /[a-zA-ZáéíóúñÁÉÍÓÚÑ]/.test(v) && isNaN(v)) count++; });
+    if(count>bestCount){ bestCount=count; best=c; }
+  }
+  return { col:best, headerRow:-1 };
+}
+
+function openImportPreviewModal(raw){
+  const maxCols = Math.min(12, Math.max(...raw.slice(0,25).map(r=>r.length)));
+  const guess = guessNameCol(raw);
+  let nameCol = guess.col;
+  let grupoCol = -1;
+  let startRow = guess.headerRow>=0 ? guess.headerRow+1 : 0;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+  <div class="sheet">
+    <button class="close-x" id="closeSheet">✕</button>
+    <h3>Importar invitados</h3>
+    <p style="font-size:12.5px;color:var(--ink-dim);margin:-8px 0 14px;">Revisa la vista previa de tu archivo y confirma en qué columna están los nombres.</p>
+    <div class="xls-preview" id="xlsPreview"></div>
+    <div class="field-row" style="margin-top:14px;">
+      <div class="field">
+        <label>Columna con los nombres</label>
+        <select id="pickNameCol"></select>
+      </div>
+      <div class="field">
+        <label>Columna de grupo (opcional)</label>
+        <select id="pickGrupoCol"></select>
+      </div>
+    </div>
+    <div class="field">
+      <label>¿En qué fila empiezan los invitados?</label>
+      <input id="pickStartRow" type="number" min="1" value="${startRow+1}">
+    </div>
+    <div id="importCount" style="font-size:13px;font-weight:700;margin-bottom:10px;"></div>
+    <button class="btn-primary" id="doImportBtn">Importar</button>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
+  $('#closeSheet',overlay).onclick = ()=> overlay.remove();
+
+  const colOptsHtml = (selectedIdx, withNinguna)=>{
+    let html = withNinguna ? `<option value="-1">Ninguna</option>` : '';
+    for(let c=0;c<maxCols;c++){
+      let sample = '';
+      for(let r=0;r<raw.length;r++){ if(raw[r][c] && String(raw[r][c]).trim()){ sample = String(raw[r][c]).trim(); break; } }
+      html += `<option value="${c}" ${c===selectedIdx?'selected':''}>${colLetter(c)}${sample?': '+sample.slice(0,16):''}</option>`;
+    }
+    return html;
+  };
+  $('#pickNameCol',overlay).innerHTML = colOptsHtml(nameCol, false);
+  $('#pickGrupoCol',overlay).innerHTML = colOptsHtml(grupoCol, true);
+
+  function renderPreview(){
+    const startIdx = Math.max(1, parseInt($('#pickStartRow',overlay).value)||1) - 1;
+    const rows = raw.slice(0, 8);
+    let html = '<table class="xls-table"><thead><tr><th></th>';
+    for(let c=0;c<maxCols;c++) html += `<th class="${c===nameCol?'xls-col-name':''}${c===grupoCol?' xls-col-grupo':''}">${colLetter(c)}</th>`;
+    html += '</tr></thead><tbody>';
+    rows.forEach((r,ri)=>{
+      html += `<tr class="${ri===startIdx?'xls-row-start':''}"><td class="xls-rownum">${ri+1}</td>`;
+      for(let c=0;c<maxCols;c++){
+        html += `<td class="${c===nameCol?'xls-col-name':''}${c===grupoCol?' xls-col-grupo':''}">${String(r[c]??'').slice(0,16)}</td>`;
+      }
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    $('#xlsPreview',overlay).innerHTML = html;
+  }
+  function updateCount(){
+    const sr = Math.max(1, parseInt($('#pickStartRow',overlay).value)||1) - 1;
+    let count = 0;
+    for(let r=sr;r<raw.length;r++){ if(raw[r][nameCol] && String(raw[r][nameCol]).trim()) count++; }
+    $('#importCount',overlay).textContent = `Se importarán ${count} invitado(s).`;
+  }
+  renderPreview(); updateCount();
+
+  $('#pickNameCol',overlay).onchange = (e)=>{ nameCol=parseInt(e.target.value); renderPreview(); updateCount(); };
+  $('#pickGrupoCol',overlay).onchange = (e)=>{ grupoCol=parseInt(e.target.value); renderPreview(); updateCount(); };
+  $('#pickStartRow',overlay).oninput = ()=>{ renderPreview(); updateCount(); };
+
+  $('#doImportBtn',overlay).onclick = async ()=>{
+    const sr = Math.max(1, parseInt($('#pickStartRow',overlay).value)||1) - 1;
+    let agregados = 0;
+    for(let r=sr;r<raw.length;r++){
+      const nombre = String(raw[r][nameCol] ?? '').trim();
+      if(!nombre) continue;
+      const grupo = grupoCol>=0 ? String(raw[r][grupoCol] ?? '').trim() : '';
+      state.data.invitados.push({ id:uid(), nombre, grupo, mesaId:null });
+      agregados++;
+    }
+    if(agregados===0){ alert('No se encontró ningún nombre con esa configuración. Ajusta la columna o la fila de inicio.'); return; }
+    await saveShared();
+    overlay.remove();
+    render();
+    alert(`Se importaron ${agregados} invitado(s).`);
+  };
 }
 
 function openInvitadoModal(invId){
