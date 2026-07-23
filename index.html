@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Unidos — Gastos en pareja</title>
+<title>Unidos — Gastos y mesas de boda</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Unidos">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --rose:#52664A;
@@ -181,6 +182,43 @@
     margin-top:4px;cursor:pointer;padding:0;
   }
 
+  /* ---------- mesas ---------- */
+  .ref-row{display:flex;gap:10px;margin-bottom:16px;}
+  .ref-chip{
+    flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:12px;text-align:center;font-size:12.5px;font-weight:700;color:var(--ink-dim);
+  }
+  .ref-estrado{background:var(--indigo);color:#fff;border-color:var(--indigo);}
+  .mesa-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .mesa-card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px 10px;text-align:center;cursor:pointer;
+  }
+  .mesa-num{
+    width:36px;height:36px;border-radius:50%;background:var(--rose-soft);color:var(--rose);
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;
+    margin:0 auto 8px;
+  }
+  .mesa-nombre{font-size:12.5px;color:var(--ink-dim);margin-bottom:4px;}
+  .mesa-count{font-weight:700;font-size:16px;}
+  .mesa-count span{font-weight:400;color:var(--ink-dim);font-size:13px;}
+  .mesa-card.mesa-full .mesa-num{background:var(--gold-soft);color:var(--gold);}
+  .mesa-card.mesa-over{border-color:var(--danger);}
+  .mesa-card.mesa-over .mesa-num{background:#F3DAD6;color:var(--danger);}
+
+  .inv-row{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:12px 14px;margin-bottom:9px;display:flex;align-items:center;justify-content:space-between;
+    gap:10px;cursor:pointer;
+  }
+  .inv-nombre{font-weight:700;font-size:13.5px;}
+  .inv-grupo{font-size:11.5px;color:var(--ink-dim);margin-top:1px;}
+  .inv-mesa{
+    font-size:11px;font-weight:700;padding:5px 10px;border-radius:99px;flex-shrink:0;
+    background:var(--rose-soft);color:var(--rose);
+  }
+  .inv-mesa.inv-sinmesa{background:var(--line);color:var(--ink-dim);}
+
   /* ---------- bottom nav ---------- */
   nav.tabbar{
     position:fixed;bottom:0;left:50%;transform:translateX(-50%);
@@ -339,7 +377,16 @@ function defaultData(){
       { id:'ahorro-terreno', nombre:'Ahorro para Terreno', icono:'🌱', tint:'sage', meta:null,
         subobjetivos:['Aporte de ahorro','Trámites legales','Otros'].map(nombre=>({id:uid(),nombre,meta:null})) },
     ],
-    gastos: []
+    gastos: [],
+    mesas: [
+      { id:'mesa-1', numero:1, nombre:'Mesa 1', asientos:10 },
+      { id:'mesa-2', numero:2, nombre:'Mesa 2', asientos:10 },
+      { id:'mesa-3', numero:3, nombre:'Mesa 3', asientos:10 },
+      { id:'mesa-4', numero:4, nombre:'Mesa 4', asientos:10 },
+      { id:'mesa-5', numero:5, nombre:'Mesa 5', asientos:10 },
+      { id:'mesa-6', numero:6, nombre:'Mesa 6', asientos:10 },
+    ],
+    invitados: []
   };
 }
 
@@ -348,6 +395,18 @@ function defaultData(){
 // y reasigna cada gasto viejo (que tenía "categoria" como texto) a su nuevo subobjetivoId.
 function migrateData(data){
   let changed = false;
+  if(!data.mesas){
+    data.mesas = [
+      { id:'mesa-1', numero:1, nombre:'Mesa 1', asientos:10 },
+      { id:'mesa-2', numero:2, nombre:'Mesa 2', asientos:10 },
+      { id:'mesa-3', numero:3, nombre:'Mesa 3', asientos:10 },
+      { id:'mesa-4', numero:4, nombre:'Mesa 4', asientos:10 },
+      { id:'mesa-5', numero:5, nombre:'Mesa 5', asientos:10 },
+      { id:'mesa-6', numero:6, nombre:'Mesa 6', asientos:10 },
+    ];
+    changed = true;
+  }
+  if(!data.invitados){ data.invitados = []; changed = true; }
   data.objetivos.forEach(o=>{
     if(!o.subobjetivos){
       o.subobjetivos = (o.categorias||[]).map(nombre=>({id:uid(), nombre, meta:null}));
@@ -377,6 +436,8 @@ let state = {
   filterObjetivo: 'todos',
   filterQuien: 'todos',
   search: '',
+  mesasSub: 'plano',
+  invitadosSearch: '',
 };
 
 /*
@@ -489,12 +550,14 @@ function render(){
 function topBar(){
   const nombres = state.data.parejaNombres;
   const label = state.tab==='resumen' ? `Hola, ${nombres[state.perfil.quien]||''}`
-    : state.tab==='gastos' ? 'Todos los gastos' : 'Objetivos';
+    : state.tab==='gastos' ? 'Todos los gastos'
+    : state.tab==='mesas' ? 'Mesas del día'
+    : 'Objetivos';
   const sub = state.tab==='resumen' ? 'Así van sus finanzas juntos' : '';
   return `
   <header class="top">
     <div>
-      <div class="title">${label==='Todos los gastos'||label==='Objetivos' ? label : `Hola, <span class="knot">${nombres[state.perfil.quien]||''}</span>`}</div>
+      <div class="title">${label==='Todos los gastos'||label==='Objetivos'||label==='Mesas del día' ? label : `Hola, <span class="knot">${nombres[state.perfil.quien]||''}</span>`}</div>
       ${sub?`<div class="sub">${sub}</div>`:''}
     </div>
     <div class="gear" id="gearBtn">
@@ -519,6 +582,10 @@ function tabBar(){
       <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
       Gastos
     </button>
+    <button data-tab="mesas" class="${t==='mesas'?'active':''}">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+      Mesas
+    </button>
   </nav>`;
 }
 
@@ -526,6 +593,7 @@ function tabContent(){
   if(state.tab==='resumen') return resumenView();
   if(state.tab==='objetivos') return objetivosView();
   if(state.tab==='gastos') return gastosView();
+  if(state.tab==='mesas') return mesasView();
   return '';
 }
 
@@ -781,13 +849,265 @@ function gastosView(){
   `;
 }
 
+/* ---------------- mesas ---------------- */
+function mesasView(){
+  const sub = state.mesasSub;
+  return `
+  <div class="seg" style="margin-bottom:16px;">
+    <button type="button" data-mesasub="plano" class="${sub==='plano'?'on':''}">Plano de mesas</button>
+    <button type="button" data-mesasub="invitados" class="${sub==='invitados'?'on':''}">Invitados</button>
+  </div>
+  ${sub==='plano' ? planoView() : invitadosView()}
+  `;
+}
+
+function planoView(){
+  const asignados = state.data.invitados.filter(i=>i.mesaId);
+  const sinMesa = state.data.invitados.length - asignados.length;
+  const mesas = [...state.data.mesas].sort((a,b)=>a.numero-b.numero);
+  const cards = mesas.map(m=>{
+    const ocupantes = state.data.invitados.filter(i=>i.mesaId===m.id);
+    const llena = ocupantes.length >= m.asientos;
+    const excedida = ocupantes.length > m.asientos;
+    return `
+    <div class="mesa-card ${excedida?'mesa-over':(llena?'mesa-full':'')}" data-mesaopen="${m.id}">
+      <div class="mesa-num">${m.numero}</div>
+      <div class="mesa-nombre">${m.nombre}</div>
+      <div class="mesa-count num">${ocupantes.length}<span>/${m.asientos}</span></div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="ref-row">
+    <div class="ref-chip">👰🤵 Novios</div>
+    <div class="ref-chip ref-estrado">🎤 Estrado</div>
+  </div>
+  <div class="mesa-grid">${cards}</div>
+  <div class="empty" style="margin-top:16px;">
+    ${sinMesa>0
+      ? `${sinMesa} invitado(s) todavía sin mesa asignada. Ve a la pestaña <b>Invitados</b> para ubicarlos.`
+      : state.data.invitados.length===0
+        ? 'Todavía no hay invitados cargados. Ve a la pestaña Invitados para importarlos desde Excel.'
+        : '¡Todos los invitados ya tienen mesa asignada! 🎉'}
+  </div>
+  `;
+}
+
+function invitadosView(){
+  const s = state.invitadosSearch.trim().toLowerCase();
+  let list = [...state.data.invitados];
+  if(s) list = list.filter(i => i.nombre.toLowerCase().includes(s) || (i.grupo||'').toLowerCase().includes(s));
+  list.sort((a,b)=> a.nombre.localeCompare(b.nombre));
+  const mesasById = Object.fromEntries(state.data.mesas.map(m=>[m.id,m]));
+
+  const rows = list.map(i=>{
+    const mesa = i.mesaId ? mesasById[i.mesaId] : null;
+    return `
+    <div class="inv-row" data-invopen="${i.id}">
+      <div class="inv-mid">
+        <div class="inv-nombre">${i.nombre}</div>
+        ${i.grupo ? `<div class="inv-grupo">${i.grupo}</div>` : ''}
+      </div>
+      <div class="inv-mesa ${mesa?'':'inv-sinmesa'}">${mesa ? `Mesa ${mesa.numero}` : 'Sin mesa'}</div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="filters">
+    <input id="fInvSearch" placeholder="Buscar invitado..." value="${state.invitadosSearch}" style="flex:1;">
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:14px;">
+    <button class="btn-ghost" id="importXlsBtn" style="margin:0;flex:1;">📥 Importar desde Excel</button>
+  </div>
+  <input type="file" id="xlsInput" accept=".xlsx,.xls,.csv" style="display:none;">
+  <div style="font-size:12px;color:var(--ink-dim);margin:-6px 0 14px;">${state.data.invitados.length} invitados en total</div>
+  ${rows || `<div class="empty">Todavía no hay invitados. Impórtalos desde Excel o agrégalos con el botón "+".</div>`}
+  `;
+}
+
+async function handleExcelFile(file){
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type:'array' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'' });
+    if(!raw.length){ alert('El archivo está vacío.'); return; }
+
+    let startIdx = 0, nameCol = 0, grupoCol = -1;
+    const primera = raw[0].map(c=>String(c).toLowerCase());
+    const pareceHeader = primera.some(c=>/nombre|invitado|guest|name/.test(c));
+    if(pareceHeader){
+      nameCol = primera.findIndex(c=>/nombre|invitado|guest|name/.test(c));
+      if(nameCol<0) nameCol = 0;
+      grupoCol = primera.findIndex(c=>/grupo|familia|group|mesa/.test(c));
+      startIdx = 1;
+    }
+
+    let agregados = 0;
+    for(let r=startIdx; r<raw.length; r++){
+      const row = raw[r];
+      const nombre = String(row[nameCol] ?? '').trim();
+      if(!nombre) continue;
+      const grupo = grupoCol>=0 ? String(row[grupoCol] ?? '').trim() : '';
+      state.data.invitados.push({ id:uid(), nombre, grupo, mesaId:null });
+      agregados++;
+    }
+    if(agregados===0){ alert('No se encontraron nombres para importar. Revisa que la primera columna tenga los nombres de los invitados.'); return; }
+    await saveShared();
+    render();
+    alert(`Se importaron ${agregados} invitado(s).`);
+  }catch(e){
+    console.error(e);
+    alert('No se pudo leer el archivo. Asegúrate de que sea un Excel (.xlsx) o CSV válido.');
+  }
+}
+
+function openInvitadoModal(invId){
+  const isNew = !invId;
+  const inv = isNew ? { id:null, nombre:'', grupo:'', mesaId:null } : state.data.invitados.find(i=>i.id===invId);
+  const mesasOpts = [...state.data.mesas].sort((a,b)=>a.numero-b.numero)
+    .map(m=>`<option value="${m.id}" ${inv.mesaId===m.id?'selected':''}>Mesa ${m.numero} (${state.data.invitados.filter(i=>i.mesaId===m.id).length}/${m.asientos})</option>`).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+  <div class="sheet">
+    <button class="close-x" id="closeSheet">✕</button>
+    <h3>${isNew ? 'Nuevo invitado' : 'Editar invitado'}</h3>
+    <div class="field">
+      <label>Nombre</label>
+      <input id="iNombre" value="${inv.nombre}" placeholder="Nombre del invitado">
+    </div>
+    <div class="field">
+      <label>Grupo o familia (opcional)</label>
+      <input id="iGrupo" value="${inv.grupo||''}" placeholder="Ej. Familia de la novia">
+    </div>
+    <div class="field">
+      <label>Mesa asignada</label>
+      <select id="iMesa">
+        <option value="">Sin mesa</option>
+        ${mesasOpts}
+      </select>
+    </div>
+    <button class="btn-primary" id="saveInv">Guardar</button>
+    ${!isNew ? `<button class="btn-ghost" id="delInv">Eliminar invitado</button>` : ''}
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
+  $('#closeSheet',overlay).onclick = ()=> overlay.remove();
+
+  $('#saveInv',overlay).onclick = async ()=>{
+    const nombre = $('#iNombre',overlay).value.trim();
+    if(!nombre){ alert('Escribe el nombre del invitado.'); return; }
+    const grupo = $('#iGrupo',overlay).value.trim();
+    const mesaId = $('#iMesa',overlay).value || null;
+    if(isNew){
+      state.data.invitados.push({ id:uid(), nombre, grupo, mesaId });
+    } else {
+      inv.nombre = nombre; inv.grupo = grupo; inv.mesaId = mesaId;
+    }
+    await saveShared();
+    overlay.remove();
+    render();
+  };
+  if(!isNew){
+    $('#delInv',overlay).onclick = async ()=>{
+      if(confirm(`¿Eliminar a ${inv.nombre} de la lista de invitados?`)){
+        state.data.invitados = state.data.invitados.filter(i=>i.id!==inv.id);
+        await saveShared();
+        overlay.remove();
+        render();
+      }
+    };
+  }
+}
+
+function openMesaModal(mesaId){
+  const m = state.data.mesas.find(x=>x.id===mesaId);
+  const ocupantes = state.data.invitados.filter(i=>i.mesaId===m.id);
+  const disponibles = state.data.invitados.filter(i=>!i.mesaId);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+  <div class="sheet">
+    <button class="close-x" id="closeSheet">✕</button>
+    <h3>Mesa ${m.numero}</h3>
+    <div class="field-row">
+      <div class="field">
+        <label>Nombre de la mesa</label>
+        <input id="mNombre" value="${m.nombre}">
+      </div>
+      <div class="field" style="max-width:110px;">
+        <label>Asientos</label>
+        <input id="mAsientos" type="number" min="1" value="${m.asientos}">
+      </div>
+    </div>
+    <button class="btn-ghost" id="saveMesaBtn" style="margin-top:0;">Guardar cambios de la mesa</button>
+
+    <div class="field" style="margin-top:18px;">
+      <label>Sentados aquí (${ocupantes.length}/${m.asientos})</label>
+      <div id="ocupantesList">
+        ${ocupantes.length ? ocupantes.map(i=>`
+          <div class="inv-row" style="cursor:default;">
+            <div class="inv-mid"><div class="inv-nombre">${i.nombre}</div>${i.grupo?`<div class="inv-grupo">${i.grupo}</div>`:''}</div>
+            <button class="gasto-del" data-quitar="${i.id}">Quitar</button>
+          </div>`).join('') : `<div class="empty" style="padding:16px;">Nadie sentado todavía en esta mesa.</div>`}
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Agregar invitado a esta mesa</label>
+      <select id="addInvSelect">
+        <option value="">Elige un invitado sin mesa...</option>
+        ${disponibles.map(i=>`<option value="${i.id}">${i.nombre}</option>`).join('')}
+      </select>
+      <button class="btn-primary" id="addInvBtn" style="margin-top:10px;">Sentar en esta mesa</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
+  $('#closeSheet',overlay).onclick = ()=> overlay.remove();
+
+  $('#saveMesaBtn',overlay).onclick = async ()=>{
+    const nombre = $('#mNombre',overlay).value.trim() || m.nombre;
+    const asientos = parseInt($('#mAsientos',overlay).value) || m.asientos;
+    m.nombre = nombre; m.asientos = asientos;
+    await saveShared();
+    overlay.remove();
+    render();
+  };
+
+  $('#addInvBtn',overlay).onclick = async ()=>{
+    const invId = $('#addInvSelect',overlay).value;
+    if(!invId) return;
+    const inv = state.data.invitados.find(i=>i.id===invId);
+    if(!inv) return;
+    if(ocupantes.length >= m.asientos){
+      if(!confirm(`Esta mesa ya tiene ${ocupantes.length} de ${m.asientos} asientos ocupados. ¿Igual quieres sentar a ${inv.nombre} aquí? Puedes ampliar los asientos arriba si prefieres.`)) return;
+    }
+    inv.mesaId = m.id;
+    await saveShared();
+    overlay.remove();
+    render();
+    openMesaModal(mesaId);
+  };
+
+  $$('[data-quitar]',overlay).forEach(b=>{
+    b.onclick = async ()=>{
+      const inv = state.data.invitados.find(i=>i.id===b.getAttribute('data-quitar'));
+      if(inv){ inv.mesaId = null; await saveShared(); render(); overlay.remove(); openMesaModal(mesaId); }
+    };
+  });
+}
+
 /* ---------------- bind events ---------------- */
 function bindMain(){
   $$('[data-tab]').forEach(el=>{
     el.onclick = ()=>{ state.tab = el.getAttribute('data-tab'); render(); };
   });
   $('#gearBtn').onclick = openSettingsModal;
-  $('#fabAdd').onclick = ()=> openGastoModal();
+  $('#fabAdd').onclick = ()=> { state.tab==='mesas' ? openInvitadoModal() : openGastoModal(); };
 
   if(state.tab==='objetivos'){
     $$('[data-objopen]').forEach(el=>{
@@ -804,6 +1124,28 @@ function bindMain(){
     $('#fObjetivo').onchange = e=>{ state.filterObjetivo=e.target.value; render(); };
     $('#fQuien').onchange = e=>{ state.filterQuien=e.target.value; render(); };
     $('#fSearch').oninput = e=>{ state.search=e.target.value; render(); };
+  }
+  if(state.tab==='mesas'){
+    $$('[data-mesasub]').forEach(el=>{
+      el.onclick = ()=>{ state.mesasSub = el.getAttribute('data-mesasub'); render(); };
+    });
+    if(state.mesasSub==='plano'){
+      $$('[data-mesaopen]').forEach(el=>{
+        el.onclick = ()=> openMesaModal(el.getAttribute('data-mesaopen'));
+      });
+    }
+    if(state.mesasSub==='invitados'){
+      $('#fInvSearch').oninput = e=>{ state.invitadosSearch = e.target.value; render(); };
+      $('#importXlsBtn').onclick = ()=> $('#xlsInput').click();
+      $('#xlsInput').onchange = (e)=>{
+        const file = e.target.files[0];
+        if(file) handleExcelFile(file);
+        e.target.value = '';
+      };
+      $$('[data-invopen]').forEach(el=>{
+        el.onclick = ()=> openInvitadoModal(el.getAttribute('data-invopen'));
+      });
+    }
   }
   $$('[data-delgasto]').forEach(el=>{
     el.onclick = async (ev)=>{
