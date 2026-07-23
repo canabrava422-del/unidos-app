@@ -145,6 +145,11 @@
   .sub-row-top{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;}
   .sub-row-top span:first-child{color:var(--ink);}
   .sub-row-top .num{font-weight:700;}
+  .sub-check{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:15px;height:15px;border-radius:50%;background:var(--rose);color:#fff;
+    font-size:9.5px;font-weight:800;line-height:1;margin-right:2px;position:relative;top:-1px;
+  }
   .sub-row-track{height:4px;background:var(--line);border-radius:3px;overflow:hidden;}
   .sub-row-fill{height:100%;border-radius:3px;opacity:.55;}
   .sub-row-warn{font-size:11px;color:var(--danger);font-weight:600;margin-top:4px;}
@@ -358,7 +363,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v26";
+const APP_VERSION = "v27";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -761,11 +766,12 @@ function objetivosView(){
         if(s.meta){
           const pct = Math.min(100, Math.round((st.total/s.meta)*100));
           const excedido = st.total > s.meta;
+          const completo = st.total >= s.meta;
           const barColor = excedido ? 'var(--danger)' : tn.fg;
           return `
           <div class="sub-row">
             <div class="sub-row-top">
-              <span>${s.nombre}</span>
+              <span>${completo ? `<span class="sub-check" title="Pago completo">✓</span> ` : ''}${s.nombre}</span>
               <span class="num">${fmt(st.total)} <span style="color:var(--ink-dim);font-weight:400;">de ${fmt(s.meta)}</span></span>
             </div>
             <div class="sub-row-track"><div class="sub-row-fill" style="width:${pct}%;background:${barColor};opacity:1;"></div></div>
