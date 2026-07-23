@@ -371,7 +371,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v21";
+const APP_VERSION = "v23";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -1256,7 +1256,7 @@ function mesaGroupSVG(mesa, ocupantes, cx, cy, opts={}){
   const umbral = state.data.umbralMesaAlerta || 10;
   const excedida = ocupantes.length > umbral;
   const colorMesa = excedida ? 'var(--danger)' : 'var(--indigo)';
-  const n = Math.max(mesa.asientos, ocupantes.length);
+  const n = Math.max(mesa.asientos, ocupantes.length, umbral);
   let seatEls = '';
   for(let i=0;i<n;i++){
     const angle = (Math.PI*2*i/n) - Math.PI/2;
@@ -1273,10 +1273,17 @@ function mesaGroupSVG(mesa, ocupantes, cx, cy, opts={}){
     </g>`;
   }
   const lineas = centerLines(mesa.nombre, Math.max(6, Math.round(rTable/8)));
-  const nameEls = lineas.length===1
-    ? `<text x="${cx}" y="${(cy+nameFont*0.33).toFixed(1)}" text-anchor="middle" font-size="${nameFont}" font-weight="800" style="fill:#fff;">${escapeHtml(lineas[0])}</text>`
-    : `<text x="${cx}" y="${(cy-nameFont*0.42).toFixed(1)}" text-anchor="middle" font-size="${nameFont}" font-weight="800" style="fill:#fff;">${escapeHtml(lineas[0])}</text>
-       <text x="${cx}" y="${(cy+nameFont*0.72).toFixed(1)}" text-anchor="middle" font-size="${nameFont}" font-weight="800" style="fill:#fff;">${escapeHtml(lineas[1])}</text>`;
+  const countFont = Math.max(8, Math.round(nameFont*0.55));
+  const countTxt = `${ocupantes.length}/${mesa.asientos}`;
+  let nameEls;
+  if(lineas.length===1){
+    nameEls = `<text x="${cx}" y="${(cy-nameFont*0.15).toFixed(1)}" text-anchor="middle" font-size="${nameFont}" font-weight="800" style="fill:#fff;">${escapeHtml(lineas[0])}</text>
+       <text x="${cx}" y="${(cy+nameFont*0.75).toFixed(1)}" text-anchor="middle" font-size="${countFont}" font-weight="600" style="fill:#fff;opacity:.85;">${countTxt}</text>`;
+  } else {
+    nameEls = `<text x="${cx}" y="${(cy-nameFont*0.9).toFixed(1)}" text-anchor="middle" font-size="${nameFont}" font-weight="800" style="fill:#fff;">${escapeHtml(lineas[0])}</text>
+       <text x="${cx}" y="${(cy+nameFont*0.15).toFixed(1)}" text-anchor="middle" font-size="${nameFont}" font-weight="800" style="fill:#fff;">${escapeHtml(lineas[1])}</text>
+       <text x="${cx}" y="${(cy+nameFont*1.15).toFixed(1)}" text-anchor="middle" font-size="${countFont}" font-weight="600" style="fill:#fff;opacity:.85;">${countTxt}</text>`;
+  }
   return `
     <circle cx="${cx}" cy="${cy}" r="${rTable}" style="fill:${colorMesa};"/>
     ${nameEls}
