@@ -192,23 +192,53 @@
   .mesa-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
   .mesa-card{
     background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-    padding:18px 10px;text-align:center;cursor:pointer;
+    padding:10px;position:relative;overflow:hidden;
   }
-  .mesa-num{
-    width:36px;height:36px;border-radius:50%;background:var(--rose-soft);color:var(--rose);
-    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;
-    margin:0 auto 8px;
+  .mesa-card-head{
+    display:flex;align-items:baseline;justify-content:space-between;
+    padding:2px 4px 8px;cursor:pointer;
   }
-  .mesa-nombre{font-size:12.5px;color:var(--ink-dim);margin-bottom:4px;}
-  .mesa-count{font-weight:700;font-size:16px;}
-  .mesa-count span{font-weight:400;color:var(--ink-dim);font-size:13px;}
-  .mesa-card.mesa-full .mesa-num{background:var(--gold-soft);color:var(--gold);}
+  .mesa-nombre{font-size:12px;font-weight:700;color:var(--ink);}
+  .mesa-count{font-weight:700;font-size:12.5px;}
+  .mesa-count span{font-weight:400;color:var(--ink-dim);}
+  .mesa-card-svg{cursor:pointer;}
+  .mesa-card.mesa-full .mesa-nombre{color:var(--gold);}
   .mesa-card.mesa-over{border-color:var(--danger);}
-  .mesa-card.mesa-over .mesa-num{background:#F3DAD6;color:var(--danger);}
+  .mesa-card.mesa-over .mesa-nombre{color:var(--danger);}
+  .mesa-zoom-btn{
+    position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;
+    background:var(--paper);border:1px solid var(--line);font-size:12px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
   .mesa-svg-wrap{
     background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
     padding:10px;margin-top:14px;
   }
+
+  /* ---------- visor con zoom ---------- */
+  .zoom-overlay{
+    position:fixed;inset:0;background:rgba(20,18,15,.92);z-index:90;
+    display:flex;flex-direction:column;
+  }
+  .zoom-header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:calc(14px + env(safe-area-inset-top)) 18px 14px;color:#fff;font-weight:700;font-size:15px;
+  }
+  .zoom-header button{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;}
+  .zoom-scroll{
+    flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;
+    touch-action:pan-x pan-y;-webkit-overflow-scrolling:touch;
+  }
+  .zoom-inner{transition:width .12s ease, height .12s ease;flex-shrink:0;}
+  .zoom-controls{
+    display:flex;align-items:center;justify-content:center;gap:16px;
+    padding:14px 18px calc(14px + env(safe-area-inset-bottom));
+  }
+  .zoom-controls button{
+    width:44px;height:44px;border-radius:50%;background:#fff;border:none;
+    font-size:20px;font-weight:800;color:var(--ink);cursor:pointer;
+  }
+  .zoom-controls span{color:#fff;font-size:13px;font-weight:700;min-width:48px;text-align:center;}
 
   .inv-row{
     background:var(--card);border:1px solid var(--line);border-radius:14px;
@@ -365,7 +395,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v16";
+const APP_VERSION = "v17";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -897,10 +927,13 @@ function planoView(){
     const llena = ocupantes.length >= m.asientos;
     const excedida = ocupantes.length > m.asientos;
     return `
-    <div class="mesa-card ${excedida?'mesa-over':(llena?'mesa-full':'')}" data-mesaopen="${m.id}">
-      <div class="mesa-num">${m.numero}</div>
-      <div class="mesa-nombre">${m.nombre}</div>
-      <div class="mesa-count num">${ocupantes.length}<span>/${m.asientos}</span></div>
+    <div class="mesa-card ${excedida?'mesa-over':(llena?'mesa-full':'')}">
+      <div class="mesa-card-head" data-mesaopen="${m.id}">
+        <span class="mesa-nombre">${m.nombre}</span>
+        <span class="mesa-count num">${ocupantes.length}<span>/${m.asientos}</span></span>
+      </div>
+      <div class="mesa-card-svg" data-mesaopen="${m.id}">${mesaSVG(m, ocupantes)}</div>
+      <button class="mesa-zoom-btn" data-mesazoom="${m.id}" aria-label="Ampliar mesa ${m.numero}">🔍</button>
     </div>`;
   }).join('');
 
@@ -1260,6 +1293,67 @@ function mesaSVG(mesa, ocupantes){
   </svg>`;
 }
 
+function openMesaZoom(mesaId){
+  const m = state.data.mesas.find(x=>x.id===mesaId);
+  const ocupantes = state.data.invitados.filter(i=>i.mesaId===m.id);
+  const baseSize = 340;
+  let scale = 1.4;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'zoom-overlay';
+  overlay.innerHTML = `
+    <div class="zoom-header">
+      <span>Mesa ${m.numero} · ${m.nombre}</span>
+      <button id="zoomCloseBtn">✕</button>
+    </div>
+    <div class="zoom-scroll" id="zoomScroll">
+      <div class="zoom-inner" id="zoomInner" style="width:${baseSize*scale}px;height:${baseSize*scale}px;">
+        ${mesaSVG(m, ocupantes)}
+      </div>
+    </div>
+    <div class="zoom-controls">
+      <button id="zoomOutBtn">−</button>
+      <span id="zoomLevel">${Math.round(scale*100)}%</span>
+      <button id="zoomInBtn">+</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const inner = $('#zoomInner',overlay);
+  const scrollEl = $('#zoomScroll',overlay);
+  function applyZoom(){
+    scale = Math.max(0.6, Math.min(4, scale));
+    inner.style.width = (baseSize*scale)+'px';
+    inner.style.height = (baseSize*scale)+'px';
+    $('#zoomLevel',overlay).textContent = Math.round(scale*100)+'%';
+  }
+  $('#zoomCloseBtn',overlay).onclick = ()=> overlay.remove();
+  $('#zoomInBtn',overlay).onclick = ()=>{ scale += 0.3; applyZoom(); };
+  $('#zoomOutBtn',overlay).onclick = ()=>{ scale -= 0.3; applyZoom(); };
+
+  // gesto de pellizco (dos dedos) para hacer zoom directamente
+  let pinchDist = null, pinchStartScale = 1;
+  const dist = (t1,t2)=> Math.hypot(t1.clientX-t2.clientX, t1.clientY-t2.clientY);
+  scrollEl.addEventListener('touchstart', (e)=>{
+    if(e.touches.length===2){ pinchDist = dist(e.touches[0],e.touches[1]); pinchStartScale = scale; }
+  }, {passive:true});
+  scrollEl.addEventListener('touchmove', (e)=>{
+    if(e.touches.length===2 && pinchDist){
+      const d = dist(e.touches[0],e.touches[1]);
+      scale = pinchStartScale * (d/pinchDist);
+      applyZoom();
+      e.preventDefault();
+    }
+  }, {passive:false});
+  scrollEl.addEventListener('touchend', ()=>{ pinchDist = null; });
+
+  // centrar el scroll al abrir
+  requestAnimationFrame(()=>{
+    scrollEl.scrollLeft = (scrollEl.scrollWidth - scrollEl.clientWidth)/2;
+    scrollEl.scrollTop = (scrollEl.scrollHeight - scrollEl.clientHeight)/2;
+  });
+}
+
 function openMesaModal(mesaId){
   const m = state.data.mesas.find(x=>x.id===mesaId);
   const ocupantes = state.data.invitados.filter(i=>i.mesaId===m.id);
@@ -1389,6 +1483,9 @@ function bindMain(){
     if(state.mesasSub==='plano'){
       $$('[data-mesaopen]').forEach(el=>{
         el.onclick = ()=> openMesaModal(el.getAttribute('data-mesaopen'));
+      });
+      $$('[data-mesazoom]').forEach(el=>{
+        el.onclick = (ev)=>{ ev.stopPropagation(); openMesaZoom(el.getAttribute('data-mesazoom')); };
       });
     }
     if(state.mesasSub==='invitados'){
