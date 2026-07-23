@@ -379,7 +379,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v19";
+const APP_VERSION = "v20";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -1243,10 +1243,23 @@ function shortName(nombre){
   return `${partes[0]} ${partes[1][0]}.`;
 }
 
+function centerLines(texto, maxChars){
+  const t = String(texto).trim();
+  if(t.length<=maxChars) return [t];
+  const palabras = t.split(/\s+/);
+  let l1='', l2='';
+  for(const w of palabras){
+    if(!l2 && (l1+' '+w).trim().length<=maxChars) l1=(l1+' '+w).trim();
+    else l2=(l2+' '+w).trim();
+  }
+  return l2 ? [l1,l2] : [l1];
+}
+
 function mesaGroupSVG(mesa, ocupantes, cx, cy, opts={}){
   const rTable = opts.rTable||62, rSeat = opts.rSeat||122;
   const seatW = opts.seatW||84, seatH = opts.seatH||32;
-  const fontSize = opts.fontSize||10.5, numFont = opts.numFont||30;
+  const fontSize = opts.fontSize||10.5;
+  const nameFont = opts.nameFont || Math.round(rTable*0.28);
   const compacto = !!opts.compacto;
   const umbral = state.data.umbralMesaAlerta || 10;
   const excedida = ocupantes.length > umbral;
@@ -1267,30 +1280,34 @@ function mesaGroupSVG(mesa, ocupantes, cx, cy, opts={}){
       <text x="${sx.toFixed(1)}" y="${(sy+fontSize*0.35).toFixed(1)}" text-anchor="middle" font-size="${fontSize}" font-weight="${guest?'700':'400'}" style="fill:${txtColor};">${label}</text>
     </g>`;
   }
+  const lineas = centerLines(mesa.nombre, Math.max(6, Math.round(rTable/8)));
+  const nameEls = lineas.length===1
+    ? `<text x="${cx}" y="${(cy+nameFont*0.33).toFixed(1)}" text-anchor="middle" font-size="${nameFont}" font-weight="800" style="fill:#fff;">${escapeHtml(lineas[0])}</text>`
+    : `<text x="${cx}" y="${(cy-nameFont*0.42).toFixed(1)}" text-anchor="middle" font-size="${nameFont}" font-weight="800" style="fill:#fff;">${escapeHtml(lineas[0])}</text>
+       <text x="${cx}" y="${(cy+nameFont*0.72).toFixed(1)}" text-anchor="middle" font-size="${nameFont}" font-weight="800" style="fill:#fff;">${escapeHtml(lineas[1])}</text>`;
   return `
     <circle cx="${cx}" cy="${cy}" r="${rTable}" style="fill:${colorMesa};"/>
-    <text x="${cx}" y="${(cy+numFont*0.33).toFixed(1)}" text-anchor="middle" font-size="${numFont}" font-weight="800" style="fill:#fff;">${mesa.numero}</text>
+    ${nameEls}
     ${seatEls}`;
 }
 
 function mesaSVG(mesa, ocupantes){
   const size = 320, cx = size/2, cy = size/2;
   return `<svg viewBox="0 0 ${size} ${size}" style="width:100%;height:auto;display:block;">
-    ${mesaGroupSVG(mesa, ocupantes, cx, cy, {rTable:62, rSeat:122, seatW:84, seatH:32, fontSize:10.5, numFont:30})}
+    ${mesaGroupSVG(mesa, ocupantes, cx, cy, {rTable:62, rSeat:122, seatW:84, seatH:32, fontSize:10.5, nameFont:19})}
   </svg>`;
 }
 
 function floorPlanSVG(){
   const width = 820, height = 800;
   const posiciones = { 4:[150,140], 1:[430,140], 5:[150,400], 2:[430,400], 6:[150,660], 3:[430,660] };
-  const opts = {rTable:56, rSeat:98, seatW:56, seatH:21, fontSize:8, numFont:24, compacto:true};
+  const opts = {rTable:56, rSeat:98, seatW:56, seatH:21, fontSize:8, nameFont:15, compacto:true};
   let contenido = '';
   Object.entries(posiciones).forEach(([num, [cx,cy]])=>{
     const m = state.data.mesas.find(x=>x.numero===Number(num));
     if(!m) return;
     const ocupantes = state.data.invitados.filter(i=>i.mesaId===m.id);
     contenido += `<g data-mesaopen="${m.id}" style="cursor:pointer;">
-      <text x="${cx}" y="${cy-84}" text-anchor="middle" font-size="12" font-weight="700" style="fill:var(--ink-dim);">${escapeHtml(m.nombre)}</text>
       ${mesaGroupSVG(m, ocupantes, cx, cy, opts)}
     </g>`;
   });
