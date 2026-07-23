@@ -379,7 +379,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v18";
+const APP_VERSION = "v19";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -422,7 +422,8 @@ function defaultData(){
       { id:'mesa-5', numero:5, nombre:'Mesa 5', asientos:10 },
       { id:'mesa-6', numero:6, nombre:'Mesa 6', asientos:10 },
     ],
-    invitados: []
+    invitados: [],
+    umbralMesaAlerta: 10
   };
 }
 
@@ -443,6 +444,7 @@ function migrateData(data){
     changed = true;
   }
   if(!data.invitados){ data.invitados = []; changed = true; }
+  if(data.umbralMesaAlerta==null){ data.umbralMesaAlerta = 10; changed = true; }
   data.objetivos.forEach(o=>{
     if(!o.subobjetivos){
       o.subobjetivos = (o.categorias||[]).map(nombre=>({id:uid(), nombre, meta:null}));
@@ -1155,9 +1157,20 @@ function openImportPreviewModal(raw){
     await saveShared();
     overlay.remove();
     render();
-    alert(actualizados>0
+
+    const umbral = state.data.umbralMesaAlerta || 10;
+    const excedidas = state.data.mesas
+      .map(m=>({ m, n: state.data.invitados.filter(i=>i.mesaId===m.id).length }))
+      .filter(x=>x.n > umbral);
+
+    let msg = actualizados>0
       ? `${agregados} invitado(s) nuevo(s) agregados (${sentados} ya con mesa asignada del Excel). ${actualizados} ya existían y se conservó su mesa asignada.`
-      : `Se importaron ${agregados} invitado(s)${sentados>0?`, ${sentados} de ellos ya sentados en su mesa`:''}.`);
+      : `Se importaron ${agregados} invitado(s)${sentados>0?`, ${sentados} de ellos ya sentados en su mesa`:''}.`;
+    if(excedidas.length){
+      msg += `\n\n⚠️ Mesas por encima del umbral de alerta (${umbral}):\n` +
+        excedidas.map(x=>`- Mesa ${x.m.numero}: ${x.n} invitados`).join('\n');
+    }
+    alert(msg);
   };
 }
 
@@ -1235,6 +1248,9 @@ function mesaGroupSVG(mesa, ocupantes, cx, cy, opts={}){
   const seatW = opts.seatW||84, seatH = opts.seatH||32;
   const fontSize = opts.fontSize||10.5, numFont = opts.numFont||30;
   const compacto = !!opts.compacto;
+  const umbral = state.data.umbralMesaAlerta || 10;
+  const excedida = ocupantes.length > umbral;
+  const colorMesa = excedida ? 'var(--danger)' : 'var(--indigo)';
   const n = Math.max(mesa.asientos, ocupantes.length);
   let seatEls = '';
   for(let i=0;i<n;i++){
@@ -1242,8 +1258,8 @@ function mesaGroupSVG(mesa, ocupantes, cx, cy, opts={}){
     const sx = cx + rSeat*Math.cos(angle);
     const sy = cy + rSeat*Math.sin(angle);
     const guest = ocupantes[i];
-    const fill = guest ? 'var(--rose-soft)' : 'var(--card)';
-    const stroke = guest ? 'var(--rose)' : 'var(--line)';
+    const fill = guest ? (excedida ? '#F3DAD6' : 'var(--rose-soft)') : 'var(--card)';
+    const stroke = guest ? (excedida ? 'var(--danger)' : 'var(--rose)') : 'var(--line)';
     const txtColor = guest ? 'var(--ink)' : 'var(--ink-dim)';
     const label = guest ? escapeHtml(shortName(guest.nombre)) : (compacto ? `${i+1}` : `Asiento ${i+1}`);
     seatEls += `<g class="${guest?'seat-occupied':'seat-empty'}" data-seatinv="${guest?guest.id:''}" style="cursor:pointer;">
@@ -1252,7 +1268,7 @@ function mesaGroupSVG(mesa, ocupantes, cx, cy, opts={}){
     </g>`;
   }
   return `
-    <circle cx="${cx}" cy="${cy}" r="${rTable}" style="fill:var(--indigo);"/>
+    <circle cx="${cx}" cy="${cy}" r="${rTable}" style="fill:${colorMesa};"/>
     <text x="${cx}" y="${(cy+numFont*0.33).toFixed(1)}" text-anchor="middle" font-size="${numFont}" font-weight="800" style="fill:#fff;">${mesa.numero}</text>
     ${seatEls}`;
 }
@@ -1365,6 +1381,8 @@ function openMesaModal(mesaId){
   const m = state.data.mesas.find(x=>x.id===mesaId);
   const ocupantes = state.data.invitados.filter(i=>i.mesaId===m.id);
   const disponibles = state.data.invitados.filter(i=>!i.mesaId);
+  const umbral = state.data.umbralMesaAlerta || 10;
+  const excedida = ocupantes.length > umbral;
 
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
@@ -1372,6 +1390,7 @@ function openMesaModal(mesaId){
   <div class="sheet">
     <button class="close-x" id="closeSheet">✕</button>
     <h3>Mesa ${m.numero}</h3>
+    ${excedida ? `<p style="background:#F3DAD6;color:var(--danger);border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:600;margin:-6px 0 14px;">⚠️ Esta mesa tiene ${ocupantes.length} invitados, por encima del umbral de alerta (${umbral}).</p>` : ''}
     <div class="field-row">
       <div class="field">
         <label>Nombre de la mesa</label>
@@ -1828,6 +1847,10 @@ function openSettingsModal(){
         <button type="button" data-m="USD" id="sMonUSD">Dólares ($)</button>
       </div>
     </div>
+    <div class="field">
+      <label>Umbral de alerta por mesa <span style="font-weight:400;color:var(--ink-dim);">— la mesa se pone roja al superar este número de invitados</span></label>
+      <input id="sUmbral" type="number" min="1" value="${state.data.umbralMesaAlerta}">
+    </div>
     <button class="btn-primary" id="saveSettings">Guardar</button>
     <p style="text-align:center;font-size:11px;color:var(--ink-dim);margin-top:14px;line-height:1.5;">
       Los nombres y objetivos se comparten entre ambos dispositivos. Quién eres tú se guarda solo en este dispositivo.
@@ -1883,6 +1906,8 @@ function openSettingsModal(){
       novio: $('#sNovio',overlay).value.trim() || 'Novio',
     };
     state.data.moneda = moneda;
+    const umbral = parseInt($('#sUmbral',overlay).value);
+    state.data.umbralMesaAlerta = umbral>0 ? umbral : 10;
     await saveShared();
     state.perfil.quien = who;
     await savePerfil();
