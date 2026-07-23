@@ -371,7 +371,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v23";
+const APP_VERSION = "v24";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -1415,7 +1415,14 @@ function openMesaModal(mesaId){
     seat.onclick = async ()=>{
       const invId = seat.getAttribute('data-seatinv');
       const inv = state.data.invitados.find(i=>i.id===invId);
-      if(inv){ inv.mesaId = null; await saveShared(); render(); overlay.remove(); openMesaModal(mesaId); }
+      if(!inv) return;
+      if(confirm(`¿Quitar a ${inv.nombre} de esta mesa?`)){
+        inv.mesaId = null;
+        await saveShared();
+        render();
+        overlay.remove();
+        openMesaModal(mesaId);
+      }
     };
   });
   $$('.seat-empty',overlay).forEach(seat=>{
