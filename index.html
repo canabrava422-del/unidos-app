@@ -353,6 +353,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
+const APP_VERSION = "v13";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -954,6 +955,14 @@ function colLetter(i){
   return s;
 }
 
+function normNombre(s){
+  return String(s||'')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/\s+/g,' ');
+}
+
 function guessNameCol(raw){
   for(let r=0;r<Math.min(8,raw.length);r++){
     for(let c=0;c<raw[r].length;c++){
@@ -1004,10 +1013,12 @@ function openImportPreviewModal(raw){
     </div>
     <div id="importCount" style="font-size:13px;font-weight:700;margin-bottom:10px;"></div>
     <button class="btn-primary" id="doImportBtn">Importar</button>
+    <button type="button" class="btn-ghost" id="cancelImportBtn">Cancelar</button>
   </div>`;
   document.body.appendChild(overlay);
   overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
   $('#closeSheet',overlay).onclick = ()=> overlay.remove();
+  $('#cancelImportBtn',overlay).onclick = ()=> overlay.remove();
 
   const colOptsHtml = (selectedIdx, withNinguna)=>{
     let html = withNinguna ? `<option value="-1">Ninguna</option>` : '';
@@ -1039,9 +1050,16 @@ function openImportPreviewModal(raw){
   }
   function updateCount(){
     const sr = Math.max(1, parseInt($('#pickStartRow',overlay).value)||1) - 1;
-    let count = 0;
-    for(let r=sr;r<raw.length;r++){ if(raw[r][nameCol] && String(raw[r][nameCol]).trim()) count++; }
-    $('#importCount',overlay).textContent = `Se importarán ${count} invitado(s).`;
+    let nuevos = 0, existentes = 0;
+    for(let r=sr;r<raw.length;r++){
+      const nombre = String(raw[r][nameCol]??'').trim();
+      if(!nombre) continue;
+      const yaExiste = state.data.invitados.some(i=>normNombre(i.nombre)===normNombre(nombre));
+      if(yaExiste) existentes++; else nuevos++;
+    }
+    $('#importCount',overlay).textContent = existentes>0
+      ? `${nuevos} invitado(s) nuevo(s) · ${existentes} ya existían (se actualizan sin duplicar ni mover de mesa)`
+      : `Se importarán ${nuevos} invitado(s) nuevo(s).`;
   }
   renderPreview(); updateCount();
 
@@ -1051,19 +1069,30 @@ function openImportPreviewModal(raw){
 
   $('#doImportBtn',overlay).onclick = async ()=>{
     const sr = Math.max(1, parseInt($('#pickStartRow',overlay).value)||1) - 1;
-    let agregados = 0;
+    let agregados = 0, actualizados = 0;
     for(let r=sr;r<raw.length;r++){
       const nombre = String(raw[r][nameCol] ?? '').trim();
       if(!nombre) continue;
       const grupo = grupoCol>=0 ? String(raw[r][grupoCol] ?? '').trim() : '';
-      state.data.invitados.push({ id:uid(), nombre, grupo, mesaId:null });
-      agregados++;
+      const existente = state.data.invitados.find(i=>normNombre(i.nombre)===normNombre(nombre));
+      if(existente){
+        // Ya existía: actualizamos nombre/grupo por si cambiaron, pero
+        // NUNCA tocamos mesaId, así conserva la mesa donde ya estaba sentado.
+        existente.nombre = nombre;
+        if(grupo) existente.grupo = grupo;
+        actualizados++;
+      } else {
+        state.data.invitados.push({ id:uid(), nombre, grupo, mesaId:null });
+        agregados++;
+      }
     }
-    if(agregados===0){ alert('No se encontró ningún nombre con esa configuración. Ajusta la columna o la fila de inicio.'); return; }
+    if(agregados===0 && actualizados===0){ alert('No se encontró ningún nombre con esa configuración. Ajusta la columna o la fila de inicio.'); return; }
     await saveShared();
     overlay.remove();
     render();
-    alert(`Se importaron ${agregados} invitado(s).`);
+    alert(actualizados>0
+      ? `${agregados} invitado(s) nuevo(s) agregados. ${actualizados} ya existían y se conservó su mesa asignada.`
+      : `Se importaron ${agregados} invitado(s).`);
   };
 }
 
@@ -1529,10 +1558,38 @@ function openSettingsModal(){
     <p style="text-align:center;font-size:11px;color:var(--ink-dim);margin-top:14px;line-height:1.5;">
       Los nombres y objetivos se comparten entre ambos dispositivos. Quién eres tú se guarda solo en este dispositivo.
     </p>
+    <div style="text-align:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);">
+      <p style="font-size:12px;color:var(--ink-dim);margin:0 0 10px;">Unidos · versión ${APP_VERSION}</p>
+      <button type="button" class="btn-ghost" id="checkUpdateBtn" style="margin:0;">Buscar actualizaciones</button>
+    </div>
   </div>`;
   document.body.appendChild(overlay);
   overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
   $('#closeSheet',overlay).onclick = ()=> overlay.remove();
+
+  $('#checkUpdateBtn',overlay).onclick = async ()=>{
+    const btn = $('#checkUpdateBtn',overlay);
+    btn.textContent = 'Buscando...';
+    try{
+      if('serviceWorker' in navigator){
+        const reg = await navigator.serviceWorker.getRegistration();
+        if(reg){
+          await reg.update();
+          if(reg.waiting){
+            btn.textContent = 'Buscar actualizaciones';
+            showUpdateBanner(reg);
+            overlay.remove();
+            return;
+          }
+        }
+      }
+      btn.textContent = 'Ya tienes la última versión';
+      setTimeout(()=>{ if(document.body.contains(btn)) btn.textContent='Buscar actualizaciones'; }, 2500);
+    }catch(e){
+      btn.textContent = 'No se pudo revisar, intenta luego';
+      setTimeout(()=>{ if(document.body.contains(btn)) btn.textContent='Buscar actualizaciones'; }, 2500);
+    }
+  };
 
   let who = state.perfil.quien;
   const setWho = w=>{ who=w; $('#sWNovia',overlay).classList.toggle('on', w==='novia'); $('#sWNovio',overlay).classList.toggle('on', w==='novio'); };
