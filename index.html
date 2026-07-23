@@ -371,7 +371,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v24";
+const APP_VERSION = "v25";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -1312,11 +1312,15 @@ function floorPlanSVG(){
   });
 
   const novX = 650, novY = 400;
+  const nombreNovia = escapeHtml(shortName(state.data.parejaNombres.novia||'Novia'));
+  const nombreNovio = escapeHtml(shortName(state.data.parejaNombres.novio||'Novio'));
   contenido += `<g>
     <text x="${novX}" y="${novY-70}" text-anchor="middle" font-size="13" font-weight="800" style="fill:var(--ink);">NOVIOS</text>
     <rect x="${novX-40}" y="${novY-55}" width="80" height="110" rx="16" style="fill:var(--rose-soft);stroke:var(--rose);stroke-width:1.5;"/>
     <rect x="${novX-28}" y="${novY-35}" width="56" height="22" rx="6" style="fill:var(--card);stroke:var(--rose);stroke-width:1.2;"/>
+    <text x="${novX}" y="${novY-35+15}" text-anchor="middle" font-size="9.5" font-weight="700" style="fill:var(--ink);">${nombreNovia}</text>
     <rect x="${novX-28}" y="${novY+13}" width="56" height="22" rx="6" style="fill:var(--card);stroke:var(--rose);stroke-width:1.2;"/>
+    <text x="${novX}" y="${novY+13+15}" text-anchor="middle" font-size="9.5" font-weight="700" style="fill:var(--ink);">${nombreNovio}</text>
   </g>`;
 
   const estX = 760, estY = 400;
