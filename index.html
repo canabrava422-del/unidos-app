@@ -197,7 +197,7 @@
     touch-action:none;background:var(--card);
   }
   .pz-inner{
-    width:100%;height:100%;transform-origin:0 0;will-change:transform;
+    width:100%;height:100%;
   }
   .pz-inner svg{width:100%;height:100%;display:block;}
   .pz-hint{
@@ -383,7 +383,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v34";
+const APP_VERSION = "v35";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -1342,7 +1342,7 @@ function floorPlanDims(){
   const extras = state.data.mesas.filter(m=>![1,2,3,4,5,6].includes(m.numero));
   const numColsExtra = Math.max(0, Math.ceil(extras.length/3));
   const estX = 760;
-  const minX = numColsExtra>0 ? (150 - 280*numColsExtra) - 90 : 0;
+  const minX = numColsExtra>0 ? (150 - 280*numColsExtra) - 140 : 0;
   const width = (estX + 100) - minX;
   return { width, height: 800, minX };
 }
@@ -1434,32 +1434,43 @@ function openMesaFullscreen(mesaId){
 function initPinchZoom(frameEl){
   if(!frameEl || frameEl.__pzInit) return;
   frameEl.__pzInit = true;
-  const inner = frameEl.querySelector('.pz-inner');
-  let scale=1, tx=0, ty=0;
-  let startDist=0, startScale=1, startMid={x:0,y:0};
-  let panStart=null, panOrigin={x:0,y:0};
-  let lastTap=0;
+  const svg = frameEl.querySelector('svg');
+  if(!svg || !svg.viewBox || !svg.viewBox.baseVal) return;
 
-  function apply(){ inner.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; }
-  function clamp(){
+  const x0 = svg.viewBox.baseVal.x, y0 = svg.viewBox.baseVal.y;
+  const w0 = svg.viewBox.baseVal.width, h0 = svg.viewBox.baseVal.height;
+  let scale = 1; // 1 = vista completa; más alto = más acercado
+  let cx = x0 + w0/2, cy = y0 + h0/2; // centro actual, en coordenadas del dibujo
+
+  function apply(){
     scale = Math.min(4, Math.max(1, scale));
-    const rect = frameEl.getBoundingClientRect();
-    const minX = -(rect.width*scale - rect.width), minY = -(rect.height*scale - rect.height);
-    tx = Math.min(0, Math.max(minX, tx));
-    ty = Math.min(0, Math.max(minY, ty));
+    const w = w0/scale, h = h0/scale;
+    let vx = cx - w/2, vy = cy - h/2;
+    vx = Math.min(x0 + w0 - w, Math.max(x0, vx));
+    vy = Math.min(y0 + h0 - h, Math.max(y0, vy));
+    cx = vx + w/2; cy = vy + h/2;
+    svg.setAttribute('viewBox', `${vx} ${vy} ${w} ${h}`);
   }
+
+  let startDist=0, startScale=1;
+  let panStart=null, panOriginCx=0, panOriginCy=0;
+  let lastTap=0;
   const dist = (t1,t2)=> Math.hypot(t1.clientX-t2.clientX, t1.clientY-t2.clientY);
-  const mid = (t1,t2)=> ({x:(t1.clientX+t2.clientX)/2, y:(t1.clientY+t2.clientY)/2});
+
+  function pxToViewBox(dxPx, dyPx){
+    const rect = frameEl.getBoundingClientRect();
+    const w = w0/scale, h = h0/scale;
+    return { dx: dxPx*(w/rect.width), dy: dyPx*(h/rect.height) };
+  }
 
   frameEl.addEventListener('touchstart',(e)=>{
     if(e.touches.length===2){
       startDist = dist(e.touches[0],e.touches[1]);
       startScale = scale;
-      startMid = mid(e.touches[0],e.touches[1]);
       panStart = null;
     } else if(e.touches.length===1 && scale>1){
       panStart = {x:e.touches[0].clientX, y:e.touches[0].clientY};
-      panOrigin = {x:tx, y:ty};
+      panOriginCx = cx; panOriginCy = cy;
     }
   }, {passive:true});
 
@@ -1467,19 +1478,15 @@ function initPinchZoom(frameEl){
     if(e.touches.length===2 && startDist){
       e.preventDefault();
       const d = dist(e.touches[0],e.touches[1]);
-      const rect = frameEl.getBoundingClientRect();
-      const ox = startMid.x - rect.left, oy = startMid.y - rect.top;
-      const newScale = Math.min(4, Math.max(1, startScale * (d/startDist)));
-      tx = ox - ((ox - tx) / scale) * newScale;
-      ty = oy - ((oy - ty) / scale) * newScale;
-      scale = newScale;
-      clamp();
+      scale = Math.min(4, Math.max(1, startScale * (d/startDist)));
       apply();
     } else if(e.touches.length===1 && panStart){
       e.preventDefault();
-      tx = panOrigin.x + (e.touches[0].clientX - panStart.x);
-      ty = panOrigin.y + (e.touches[0].clientY - panStart.y);
-      clamp();
+      const dxPx = e.touches[0].clientX - panStart.x;
+      const dyPx = e.touches[0].clientY - panStart.y;
+      const {dx,dy} = pxToViewBox(dxPx, dyPx);
+      cx = panOriginCx - dx;
+      cy = panOriginCy - dy;
       apply();
     }
   }, {passive:false});
@@ -1489,7 +1496,7 @@ function initPinchZoom(frameEl){
     if(e.touches.length===0){
       panStart=null;
       const now = Date.now();
-      if(now-lastTap<300){ scale=1; tx=0; ty=0; apply(); }
+      if(now-lastTap<300){ scale=1; cx=x0+w0/2; cy=y0+h0/2; apply(); }
       lastTap = now;
     }
   });
