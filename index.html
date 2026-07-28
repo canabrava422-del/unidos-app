@@ -363,7 +363,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v29";
+const APP_VERSION = "v32";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -889,10 +889,11 @@ function mesasView(){
 function planoView(){
   const asignados = state.data.invitados.filter(i=>i.mesaId);
   const sinMesa = state.data.invitados.length - asignados.length;
+  const dims = floorPlanDims();
 
   return `
   <div class="plano-wrap">
-    <div class="pz-frame" id="planoFrame" style="aspect-ratio:820/800;">
+    <div class="pz-frame" id="planoFrame" style="aspect-ratio:${dims.width}/${dims.height};">
       <div class="pz-inner">${floorPlanSVG()}</div>
     </div>
     <p class="pz-hint">Pellizca con dos dedos para hacer zoom · arrastra para moverte · doble toque para restablecer</p>
@@ -1311,25 +1312,38 @@ function mesaGroupSVG(mesa, ocupantes, cx, cy, opts={}){
 
 function mesaSVG(mesa, ocupantes){
   const size = 320, cx = size/2, cy = size/2;
-  return `<svg viewBox="0 0 ${size} ${size}" style="width:100%;height:auto;display:block;">
+  return `<svg viewBox="0 0 ${size} ${size}" style="display:block;">
     ${mesaGroupSVG(mesa, ocupantes, cx, cy, {rTable:62, rSeat:122, seatW:84, seatH:32, fontSize:10.5, nameFont:19})}
   </svg>`;
 }
 
+function floorPlanDims(){
+  const extras = state.data.mesas.filter(m=>![1,2,3,4,5,6].includes(m.numero));
+  const numColsExtra = Math.max(0, Math.ceil(extras.length/3));
+  const novX = 650, estX = 760;
+  const extraStartX = estX + 150;
+  const width = numColsExtra>0 ? extraStartX + 280*(numColsExtra-1) + 130 : estX + 100;
+  return { width, height: 800 };
+}
+
 function floorPlanSVG(){
-  const width = 820, height = 800;
-  const posiciones = { 4:[150,140], 1:[430,140], 5:[150,400], 2:[430,400], 6:[150,660], 3:[430,660] };
+  const filaY = [140, 400, 660];
+  const colX = i => 150 + i*280;
+  const principales = { 4:[0,0], 1:[1,0], 5:[0,1], 2:[1,1], 6:[0,2], 3:[1,2] }; // numero -> [columna, fila]
   const opts = {rTable:56, rSeat:98, seatW:56, seatH:21, fontSize:8, nameFont:15, compacto:true};
   let contenido = '';
-  Object.entries(posiciones).forEach(([num, [cx,cy]])=>{
+
+  Object.entries(principales).forEach(([num, [colI,rowI]])=>{
     const m = state.data.mesas.find(x=>x.numero===Number(num));
     if(!m) return;
     const ocupantes = state.data.invitados.filter(i=>i.mesaId===m.id);
     contenido += `<g data-mesaopen="${m.id}" style="cursor:pointer;">
-      ${mesaGroupSVG(m, ocupantes, cx, cy, opts)}
+      ${mesaGroupSVG(m, ocupantes, colX(colI), filaY[rowI], opts)}
     </g>`;
   });
 
+  // Novios y Estrado quedan siempre en el mismo lugar, sin importar cuántas
+  // mesas extra haya.
   const novX = 650, novY = 400;
   const nombreNovia = escapeHtml(shortName(state.data.parejaNombres.novia||'Novia'));
   const nombreNovio = escapeHtml(shortName(state.data.parejaNombres.novio||'Novio'));
@@ -1342,13 +1356,33 @@ function floorPlanSVG(){
     <text x="${novX}" y="${novY+13+15}" text-anchor="middle" font-size="9.5" font-weight="700" style="fill:var(--ink);">${nombreNovio}</text>
   </g>`;
 
-  const estX = 760, estY = 400;
+  const estX = novX + 110, estY = 400;
   contenido += `<g>
     <rect x="${estX-35}" y="${estY-190}" width="70" height="380" rx="18" style="fill:var(--indigo);"/>
     <text x="0" y="0" text-anchor="middle" font-size="13" font-weight="800" style="fill:#fff;" transform="translate(${estX} ${estY}) rotate(-90)">ESTRADO</text>
   </g>`;
 
-  return `<svg viewBox="0 0 ${width} ${height}" style="width:100%;height:auto;display:block;">${contenido}</svg>`;
+  // Cualquier mesa que no sea la 1-6 (por ejemplo la 7, 8...) se ubica
+  // automáticamente en columnas nuevas DESPUÉS del Estrado, sin mover
+  // nunca a Novios ni al Estrado de su lugar.
+  const extras = state.data.mesas
+    .filter(m=>![1,2,3,4,5,6].includes(m.numero))
+    .sort((a,b)=>a.numero-b.numero);
+  const extraStartX = estX + 150;
+  extras.forEach((m,idx)=>{
+    const colI = Math.floor(idx/3);
+    const rowI = idx % 3;
+    const cx = extraStartX + colI*280;
+    const ocupantes = state.data.invitados.filter(i=>i.mesaId===m.id);
+    contenido += `<g data-mesaopen="${m.id}" style="cursor:pointer;">
+      ${mesaGroupSVG(m, ocupantes, cx, filaY[rowI], opts)}
+    </g>`;
+  });
+
+  const numColsExtra = Math.max(0, Math.ceil(extras.length/3));
+  const width = numColsExtra>0 ? extraStartX + 280*(numColsExtra-1) + 130 : estX + 100;
+  const height = 800;
+  return `<svg viewBox="0 0 ${width} ${height}" style="display:block;">${contenido}</svg>`;
 }
 
 function initPinchZoom(frameEl){
