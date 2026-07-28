@@ -190,7 +190,7 @@
   /* ---------- mesas ---------- */
   .plano-wrap{
     background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-    padding:14px 10px;
+    padding:14px 10px;position:relative;
   }
   .pz-frame{
     position:relative;overflow:hidden;border-radius:12px;
@@ -205,8 +205,28 @@
   }
   .mesa-svg-wrap{
     background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-    padding:10px;margin-top:14px;
+    padding:10px;margin-top:14px;position:relative;
   }
+  .fs-btn{
+    position:absolute;top:12px;right:12px;z-index:2;
+    width:32px;height:32px;border-radius:50%;
+    background:var(--paper);border:1px solid var(--line);font-size:13px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+
+  /* ---------- visor de pantalla completa ---------- */
+  .zoom-overlay{
+    position:fixed;inset:0;background:var(--paper);z-index:90;
+    display:flex;flex-direction:column;
+  }
+  .zoom-header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:calc(14px + env(safe-area-inset-top)) 18px 14px;color:var(--ink);font-weight:700;font-size:15px;
+    border-bottom:1px solid var(--line);flex-shrink:0;
+  }
+  .zoom-header button{background:none;border:none;color:var(--ink);font-size:22px;cursor:pointer;}
+  .zoom-overlay .pz-frame{border-radius:0;flex:1;}
+  .zoom-overlay .pz-hint{padding:8px 18px calc(8px + env(safe-area-inset-bottom));margin-top:0;}
 
   .inv-row{
     background:var(--card);border:1px solid var(--line);border-radius:14px;
@@ -363,7 +383,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v33";
+const APP_VERSION = "v34";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -893,6 +913,7 @@ function planoView(){
 
   return `
   <div class="plano-wrap">
+    <button class="fs-btn" id="planoFsBtn" aria-label="Ver en pantalla completa">⛶</button>
     <div class="pz-frame" id="planoFrame" style="aspect-ratio:${dims.width}/${dims.height};">
       <div class="pz-inner">${floorPlanSVG()}</div>
     </div>
@@ -1382,6 +1403,34 @@ function floorPlanSVG(){
   return `<svg viewBox="${dims.minX} 0 ${dims.width} ${dims.height}" style="display:block;">${contenido}</svg>`;
 }
 
+function openFullscreenViewer(titulo, svgHtml){
+  const overlay = document.createElement('div');
+  overlay.className = 'zoom-overlay';
+  overlay.innerHTML = `
+    <div class="zoom-header">
+      <span>${titulo}</span>
+      <button id="zoomCloseBtn">✕</button>
+    </div>
+    <div class="pz-frame" id="fsFrame">
+      <div class="pz-inner">${svgHtml}</div>
+    </div>
+    <p class="pz-hint">Pellizca con dos dedos para hacer zoom · arrastra para moverte · doble toque para restablecer</p>
+  `;
+  document.body.appendChild(overlay);
+  $('#zoomCloseBtn',overlay).onclick = ()=> overlay.remove();
+  initPinchZoom($('#fsFrame',overlay));
+}
+
+function openPlanoFullscreen(){
+  openFullscreenViewer('Plano de mesas', floorPlanSVG());
+}
+
+function openMesaFullscreen(mesaId){
+  const m = state.data.mesas.find(x=>x.id===mesaId);
+  const ocupantes = state.data.invitados.filter(i=>i.mesaId===m.id);
+  openFullscreenViewer(`Mesa ${m.numero} · ${escapeHtml(m.nombre)}`, mesaSVG(m, ocupantes));
+}
+
 function initPinchZoom(frameEl){
   if(!frameEl || frameEl.__pzInit) return;
   frameEl.__pzInit = true;
@@ -1473,6 +1522,7 @@ function openMesaModal(mesaId){
     <button class="btn-ghost" id="saveMesaBtn" style="margin-top:0;">Guardar cambios de la mesa</button>
 
     <div class="mesa-svg-wrap">
+      <button class="fs-btn" id="mesaModalFsBtn" aria-label="Ver en pantalla completa">⛶</button>
       <div class="pz-frame" id="mesaModalFrame" style="aspect-ratio:1/1;">
         <div class="pz-inner">${mesaSVG(m, ocupantes)}</div>
       </div>
@@ -1504,6 +1554,7 @@ function openMesaModal(mesaId){
   overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
   $('#closeSheet',overlay).onclick = ()=> overlay.remove();
   initPinchZoom($('#mesaModalFrame',overlay));
+  $('#mesaModalFsBtn',overlay).onclick = ()=> openMesaFullscreen(mesaId);
 
   $$('.seat-occupied',overlay).forEach(seat=>{
     seat.onclick = async ()=>{
@@ -1593,6 +1644,7 @@ function bindMain(){
         el.onclick = ()=> openMesaModal(el.getAttribute('data-mesaopen'));
       });
       initPinchZoom($('#planoFrame'));
+      $('#planoFsBtn').onclick = ()=> openPlanoFullscreen();
     }
     if(state.mesasSub==='invitados'){
       $('#fInvSearch').oninput = e=>{ state.invitadosSearch = e.target.value; render(); };
