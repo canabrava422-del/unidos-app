@@ -363,7 +363,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v28";
+const APP_VERSION = "v29";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -1093,6 +1093,7 @@ function openImportPreviewModal(raw){
   function updateCount(){
     const sr = Math.max(1, parseInt($('#pickStartRow',overlay).value)||1) - 1;
     let nuevos = 0, existentes = 0, conMesa = 0;
+    const mesasFaltantes = new Set();
     for(let r=sr;r<raw.length;r++){
       const nombre = String(raw[r][nameCol]??'').trim();
       if(!nombre) continue;
@@ -1100,13 +1101,17 @@ function openImportPreviewModal(raw){
       if(yaExiste) existentes++; else nuevos++;
       if(mesaCol>=0){
         const num = parseInt(raw[r][mesaCol]);
-        if(!isNaN(num) && state.data.mesas.some(m=>m.numero===num)) conMesa++;
+        if(!isNaN(num)){
+          conMesa++;
+          if(!state.data.mesas.some(m=>m.numero===num)) mesasFaltantes.add(num);
+        }
       }
     }
     let txt = existentes>0
       ? `${nuevos} invitado(s) nuevo(s) · ${existentes} ya existían (se actualizan sin duplicar ni mover de mesa)`
       : `Se importarán ${nuevos} invitado(s) nuevo(s).`;
-    if(mesaCol>=0) txt += ` · ${conMesa} con mesa reconocida en el Excel`;
+    if(mesaCol>=0) txt += ` · ${conMesa} con número de mesa en el Excel`;
+    if(mesasFaltantes.size) txt += ` (se crearán las mesas: ${[...mesasFaltantes].sort((a,b)=>a-b).join(', ')})`;
     $('#importCount',overlay).textContent = txt;
   }
   renderPreview(); updateCount();
@@ -1120,6 +1125,7 @@ function openImportPreviewModal(raw){
     const sr = Math.max(1, parseInt($('#pickStartRow',overlay).value)||1) - 1;
     const forzarMesa = $('#pickOverrideMesa',overlay).checked;
     let agregados = 0, actualizados = 0, sentados = 0;
+    const mesasCreadas = [];
     for(let r=sr;r<raw.length;r++){
       const nombre = String(raw[r][nameCol] ?? '').trim();
       if(!nombre) continue;
@@ -1127,8 +1133,15 @@ function openImportPreviewModal(raw){
       let mesaIdDelExcel = null;
       if(mesaCol>=0){
         const num = parseInt(raw[r][mesaCol]);
-        const mesaEncontrada = !isNaN(num) ? state.data.mesas.find(m=>m.numero===num) : null;
-        mesaIdDelExcel = mesaEncontrada ? mesaEncontrada.id : null;
+        if(!isNaN(num)){
+          let mesaEncontrada = state.data.mesas.find(m=>m.numero===num);
+          if(!mesaEncontrada){
+            mesaEncontrada = { id:uid(), numero:num, nombre:`Mesa ${num}`, asientos:10, tint: TINTS[(num-1+TINTS.length*100)%TINTS.length].id };
+            state.data.mesas.push(mesaEncontrada);
+            mesasCreadas.push(num);
+          }
+          mesaIdDelExcel = mesaEncontrada.id;
+        }
       }
       const existente = state.data.invitados.find(i=>normNombre(i.nombre)===normNombre(nombre));
       if(existente){
@@ -1161,6 +1174,9 @@ function openImportPreviewModal(raw){
     let msg = actualizados>0
       ? `${agregados} invitado(s) nuevo(s) agregados (${sentados} con mesa asignada/actualizada del Excel). ${actualizados} ya existían.`
       : `Se importaron ${agregados} invitado(s)${sentados>0?`, ${sentados} de ellos ya sentados en su mesa`:''}.`;
+    if(mesasCreadas.length){
+      msg += `\n\n🆕 Se crearon automáticamente estas mesas porque el Excel las mencionaba y no existían: ${mesasCreadas.join(', ')}.`;
+    }
     if(excedidas.length){
       msg += `\n\n⚠️ Mesas por encima del umbral de alerta (${umbral}):\n` +
         excedidas.map(x=>`- Mesa ${x.m.numero}: ${x.n} invitados`).join('\n');
