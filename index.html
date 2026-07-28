@@ -363,7 +363,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v32";
+const APP_VERSION = "v33";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -1320,10 +1320,10 @@ function mesaSVG(mesa, ocupantes){
 function floorPlanDims(){
   const extras = state.data.mesas.filter(m=>![1,2,3,4,5,6].includes(m.numero));
   const numColsExtra = Math.max(0, Math.ceil(extras.length/3));
-  const novX = 650, estX = 760;
-  const extraStartX = estX + 150;
-  const width = numColsExtra>0 ? extraStartX + 280*(numColsExtra-1) + 130 : estX + 100;
-  return { width, height: 800 };
+  const estX = 760;
+  const minX = numColsExtra>0 ? (150 - 280*numColsExtra) - 90 : 0;
+  const width = (estX + 100) - minX;
+  return { width, height: 800, minX };
 }
 
 function floorPlanSVG(){
@@ -1363,26 +1363,23 @@ function floorPlanSVG(){
   </g>`;
 
   // Cualquier mesa que no sea la 1-6 (por ejemplo la 7, 8...) se ubica
-  // automáticamente en columnas nuevas DESPUÉS del Estrado, sin mover
-  // nunca a Novios ni al Estrado de su lugar.
+  // automáticamente en columna(s) nuevas A LA IZQUIERDA de la Mesa 4/5/6,
+  // sin mover nunca a la 1-6, a Novios ni al Estrado de su lugar.
   const extras = state.data.mesas
     .filter(m=>![1,2,3,4,5,6].includes(m.numero))
     .sort((a,b)=>a.numero-b.numero);
-  const extraStartX = estX + 150;
   extras.forEach((m,idx)=>{
-    const colI = Math.floor(idx/3);
+    const colI = Math.floor(idx/3); // 0 = columna más cercana a la Mesa 4, luego se aleja
     const rowI = idx % 3;
-    const cx = extraStartX + colI*280;
+    const cx = 150 - 280*(colI+1);
     const ocupantes = state.data.invitados.filter(i=>i.mesaId===m.id);
     contenido += `<g data-mesaopen="${m.id}" style="cursor:pointer;">
       ${mesaGroupSVG(m, ocupantes, cx, filaY[rowI], opts)}
     </g>`;
   });
 
-  const numColsExtra = Math.max(0, Math.ceil(extras.length/3));
-  const width = numColsExtra>0 ? extraStartX + 280*(numColsExtra-1) + 130 : estX + 100;
-  const height = 800;
-  return `<svg viewBox="0 0 ${width} ${height}" style="display:block;">${contenido}</svg>`;
+  const dims = floorPlanDims();
+  return `<svg viewBox="${dims.minX} 0 ${dims.width} ${dims.height}" style="display:block;">${contenido}</svg>`;
 }
 
 function initPinchZoom(frameEl){
