@@ -363,7 +363,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v27";
+const APP_VERSION = "v28";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -1048,6 +1048,10 @@ function openImportPreviewModal(raw){
       <label>¿En qué fila empiezan los invitados?</label>
       <input id="pickStartRow" type="number" min="1" value="${startRow+1}">
     </div>
+    <label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-dim);margin:0 0 14px;cursor:pointer;">
+      <input type="checkbox" id="pickOverrideMesa" style="margin-top:2px;">
+      <span>Actualizar también la mesa de invitados que ya existían en la app (si no marcas esto, se conserva la mesa que ya tenían).</span>
+    </label>
     <div id="importCount" style="font-size:13px;font-weight:700;margin-bottom:10px;"></div>
     <button class="btn-primary" id="doImportBtn">Importar</button>
     <button type="button" class="btn-ghost" id="cancelImportBtn">Cancelar</button>
@@ -1114,6 +1118,7 @@ function openImportPreviewModal(raw){
 
   $('#doImportBtn',overlay).onclick = async ()=>{
     const sr = Math.max(1, parseInt($('#pickStartRow',overlay).value)||1) - 1;
+    const forzarMesa = $('#pickOverrideMesa',overlay).checked;
     let agregados = 0, actualizados = 0, sentados = 0;
     for(let r=sr;r<raw.length;r++){
       const nombre = String(raw[r][nameCol] ?? '').trim();
@@ -1130,9 +1135,12 @@ function openImportPreviewModal(raw){
         // Ya existía: actualizamos nombre/grupo por si cambiaron.
         existente.nombre = nombre;
         if(grupo) existente.grupo = grupo;
-        // Solo le ponemos mesa del Excel si todavía NO tenía ninguna asignada;
-        // si ya estaba sentado manualmente, esa asignación se respeta siempre.
-        if(!existente.mesaId && mesaIdDelExcel){ existente.mesaId = mesaIdDelExcel; sentados++; }
+        // Si "forzarMesa" está marcado, el Excel manda siempre; si no,
+        // solo se asigna mesa cuando el invitado todavía no tenía ninguna.
+        if(mesaIdDelExcel && (forzarMesa || !existente.mesaId)){
+          if(existente.mesaId !== mesaIdDelExcel) sentados++;
+          existente.mesaId = mesaIdDelExcel;
+        }
         actualizados++;
       } else {
         state.data.invitados.push({ id:uid(), nombre, grupo, mesaId:mesaIdDelExcel });
@@ -1151,7 +1159,7 @@ function openImportPreviewModal(raw){
       .filter(x=>x.n > umbral);
 
     let msg = actualizados>0
-      ? `${agregados} invitado(s) nuevo(s) agregados (${sentados} ya con mesa asignada del Excel). ${actualizados} ya existían y se conservó su mesa asignada.`
+      ? `${agregados} invitado(s) nuevo(s) agregados (${sentados} con mesa asignada/actualizada del Excel). ${actualizados} ya existían.`
       : `Se importaron ${agregados} invitado(s)${sentados>0?`, ${sentados} de ellos ya sentados en su mesa`:''}.`;
     if(excedidas.length){
       msg += `\n\n⚠️ Mesas por encima del umbral de alerta (${umbral}):\n` +
