@@ -12,6 +12,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Unidos">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
   :root{
     --rose:#52664A;
@@ -289,6 +291,9 @@
   .luna-hotel-ciudad{font-weight:700;font-size:13px;}
   .luna-hotel-nombre{font-size:11.5px;color:var(--ink-dim);margin-top:1px;}
 
+  .luna-mapa-wrap{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;}
+  #lunaMapa{height:380px;width:100%;background:var(--line);}
+
   .cal-wrap{
     --cal-scale:1; overflow:auto; border:1px solid var(--line); border-radius:12px;
     -webkit-overflow-scrolling:touch; touch-action:pan-x pan-y;
@@ -491,7 +496,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v40";
+const APP_VERSION = "v41";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -546,7 +551,8 @@ function defaultData(){
         { id:uid(), orden:6, origen:'Panamá', destino:'Lima', fechaSalida:'2026-08-24', horaSalida:'19:09', fechaLlegada:'2026-08-24', horaLlegada:'22:45', vuelo:'', pasajeComprado:false, notas:'', escalaTour:{tourPlaneado:false,tourComprado:false,tourPagado:false,notas:''} },
       ],
       actividades: [],
-      hoteles: []
+      hoteles: [],
+      mapaPuntos: []
     }
   };
 }
@@ -596,6 +602,7 @@ function migrateData(data){
   }
   if(!data.luna.actividades){ data.luna.actividades = []; changed = true; }
   if(!data.luna.hoteles){ data.luna.hoteles = []; changed = true; }
+  if(!data.luna.mapaPuntos){ data.luna.mapaPuntos = []; changed = true; }
   data.luna.tramos.forEach(t=>{ if(!t.escalaTour){ t.escalaTour = {tourPlaneado:false,tourComprado:false,tourPagado:false,notas:''}; changed = true; } });
   data.luna.actividades.forEach(a=>{ if(a.horaFin==null){ a.horaFin=''; changed = true; } });
   data.objetivos.forEach(o=>{
@@ -1860,8 +1867,9 @@ function lunaView(){
   <div class="seg" style="margin-bottom:16px;">
     <button type="button" data-lunasub="itinerario" class="${sub==='itinerario'?'on':''}">Itinerario</button>
     <button type="button" data-lunasub="actividades" class="${sub==='actividades'?'on':''}">Actividades</button>
+    <button type="button" data-lunasub="mapa" class="${sub==='mapa'?'on':''}">Mapa</button>
   </div>
-  ${sub==='itinerario' ? itinerarioLunaView() : actividadesLunaView()}
+  ${sub==='itinerario' ? itinerarioLunaView() : sub==='actividades' ? actividadesLunaView() : mapaLunaView()}
   `;
 }
 
@@ -1936,6 +1944,16 @@ function hora12(h){
   const periodo = h<12 ? 'AM' : 'PM';
   let h12 = h%12; if(h12===0) h12=12;
   return `${h12}:00 ${periodo}`;
+}
+function hora12Texto(hhmm){
+  if(!hhmm) return '';
+  const partes = hhmm.split(':');
+  const h = parseInt(partes[0],10);
+  const m = partes[1] || '00';
+  if(isNaN(h)) return hhmm;
+  const periodo = h<12 ? 'AM' : 'PM';
+  let h12 = h%12; if(h12===0) h12=12;
+  return `${h12}:${m} ${periodo}`;
 }
 
 function calendarioTablaHTML(){
@@ -2037,8 +2055,8 @@ function itinerarioLunaView(){
       <div class="luna-card-head">
         <span class="luna-ciudad">${t.origen} → ${t.destino}</span>
       </div>
-      <div class="luna-fila"><span>📅 Sale: ${t.fechaSalida?fmtDate(t.fechaSalida):'sin fecha'}${t.horaSalida?' · '+t.horaSalida:''}</span></div>
-      <div class="luna-fila"><span>🛬 Llega: ${t.fechaLlegada?fmtDate(t.fechaLlegada):'sin fecha'}${t.horaLlegada?' · '+t.horaLlegada:''}</span></div>
+      <div class="luna-fila"><span>📅 Sale: ${t.fechaSalida?fmtDate(t.fechaSalida):'sin fecha'}${t.horaSalida?' · '+hora12Texto(t.horaSalida):''}</span></div>
+      <div class="luna-fila"><span>🛬 Llega: ${t.fechaLlegada?fmtDate(t.fechaLlegada):'sin fecha'}${t.horaLlegada?' · '+hora12Texto(t.horaLlegada):''}</span></div>
       ${t.vuelo ? `<div class="luna-fila"><span>✈️ ${t.vuelo}</span></div>` : ''}
       <div class="luna-fila">${chipEstado(t.pasajeComprado,'Pasaje comprado','Pasaje pendiente')}</div>
       ${t.notas ? `<div class="luna-notas">${t.notas}</div>` : ''}
@@ -2136,7 +2154,7 @@ function actividadesLunaView(){
         <div class="luna-dia-header">${fecha==='Sin fecha' ? 'Sin fecha asignada' : fmtFechaLarga(fecha)}</div>
         ${acts.map(a=>`
           <div class="luna-act-row ${a.hecho?'luna-act-hecho':''}" data-actopen="${a.id}">
-            <div class="luna-act-hora">${a.hora || '--:--'}${a.horaFin?'–'+a.horaFin:''}</div>
+            <div class="luna-act-hora">${a.hora ? hora12Texto(a.hora) : '--:--'}${a.horaFin?'–'+hora12Texto(a.horaFin):''}</div>
             <div class="luna-act-mid">
               <div class="luna-act-titulo">${a.titulo}</div>
               <div class="luna-act-ciudad">${a.ciudad}${a.notas?' · '+a.notas:''}</div>
@@ -2298,6 +2316,147 @@ function openHotelModal(ciudad){
   };
 }
 
+/* ---------------- mapa del viaje ---------------- */
+let _lunaMap = null;
+let _lunaMapMarkers = [];
+
+function mapaLunaView(){
+  return `
+  <div class="field-row" style="margin-bottom:10px;">
+    <div class="field" style="margin-bottom:0;flex:1;">
+      <input id="lunaMapaBuscar" placeholder="Buscar un lugar o dirección...">
+    </div>
+    <button class="btn-ghost" id="lunaMapaBuscarBtn" style="width:auto;margin:0;flex-shrink:0;">Buscar</button>
+  </div>
+  <div class="luna-mapa-wrap"><div id="lunaMapa"></div></div>
+  <p style="text-align:center;font-size:11px;color:var(--ink-dim);margin:8px 0 16px;">Toca el mapa para marcar un lugar nuevo; toca un marcador ya puesto para editarlo.</p>
+  <div class="section-head"><h2>Puntos marcados</h2></div>
+  ${puntosMapaListaHTML()}
+  `;
+}
+
+function puntosMapaListaHTML(){
+  const puntos = state.data.luna.mapaPuntos;
+  if(puntos.length===0) return `<div class="empty">Todavía no hay puntos marcados. Busca un lugar arriba o toca directamente el mapa.</div>`;
+  return puntos.map(p=>`
+    <div class="luna-hotel-row" data-puntoopen="${p.id}">
+      <div class="luna-hotel-mid">
+        <div class="luna-hotel-ciudad">${p.nombre}</div>
+        <div class="luna-hotel-nombre">${p.ciudad?p.ciudad+(p.notas?' · ':''):''}${p.notas||''}</div>
+      </div>
+    </div>`).join('');
+}
+
+function initLunaMapa(){
+  const el = document.getElementById('lunaMapa');
+  if(!el || typeof L === 'undefined') return;
+  if(_lunaMap){ _lunaMap.remove(); _lunaMap = null; _lunaMapMarkers = []; }
+
+  const puntos = state.data.luna.mapaPuntos;
+  const centro = puntos.length ? [puntos[0].lat, puntos[0].lng] : [4.5, -74];
+  _lunaMap = L.map(el).setView(centro, puntos.length ? 6 : 3);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap',
+    maxZoom: 19
+  }).addTo(_lunaMap);
+
+  puntos.forEach(p=>{
+    const marker = L.marker([p.lat, p.lng]).addTo(_lunaMap);
+    marker.bindTooltip(p.nombre);
+    marker.on('click', ()=> openMapaPuntoModal(p.id));
+    _lunaMapMarkers.push(marker);
+  });
+  if(puntos.length>1){
+    _lunaMap.fitBounds(L.latLngBounds(puntos.map(p=>[p.lat,p.lng])), {padding:[30,30]});
+  }
+  _lunaMap.on('click', (e)=> openMapaPuntoModal(null, e.latlng.lat, e.latlng.lng));
+
+  setTimeout(()=>{ if(_lunaMap) _lunaMap.invalidateSize(); }, 200);
+}
+
+async function buscarLugarMapa(){
+  const q = $('#lunaMapaBuscar').value.trim();
+  if(!q) return;
+  const btn = $('#lunaMapaBuscarBtn');
+  btn.textContent = 'Buscando...';
+  try{
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if(data && data[0] && _lunaMap){
+      _lunaMap.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 13);
+    } else {
+      alert('No se encontró ese lugar. Prueba con otro nombre o dirección.');
+    }
+  }catch(e){
+    alert('No se pudo buscar. Revisa tu conexión a internet.');
+  }
+  btn.textContent = 'Buscar';
+}
+
+function openMapaPuntoModal(puntoId, lat, lng){
+  const isNew = !puntoId;
+  const ciudades = ciudadesDelViaje();
+  const p = isNew
+    ? { id:null, nombre:'', ciudad: ciudades[0]||'', notas:'', lat, lng }
+    : state.data.luna.mapaPuntos.find(x=>x.id===puntoId);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+  <div class="sheet">
+    <button class="close-x" id="closeSheet">✕</button>
+    <h3>${isNew?'Nuevo punto en el mapa':p.nombre}</h3>
+    <div class="field">
+      <label>Nombre del lugar</label>
+      <input id="mpNombre" value="${p.nombre}" placeholder="Ej. Ciudad amurallada de Cartagena">
+    </div>
+    <div class="field">
+      <label>Relacionado con la ciudad (opcional)</label>
+      <select id="mpCiudad">
+        <option value="">Ninguna</option>
+        ${ciudades.map(c=>`<option value="${c}" ${p.ciudad===c?'selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field">
+      <label>Notas (opcional)</label>
+      <input id="mpNotas" value="${p.notas||''}" placeholder="Ej. entrada 20 mil COP, reservar con anticipación...">
+    </div>
+    <button class="btn-primary" id="saveMpBtn">${isNew?'Agregar punto':'Guardar cambios'}</button>
+    ${!isNew ? `<button class="btn-ghost" id="delMpBtn">Eliminar punto</button>` : ''}
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
+  $('#closeSheet',overlay).onclick = ()=> overlay.remove();
+
+  $('#saveMpBtn',overlay).onclick = async ()=>{
+    const nombre = $('#mpNombre',overlay).value.trim();
+    if(!nombre){ alert('Ponle un nombre al lugar.'); return; }
+    const datos = {
+      nombre,
+      ciudad: $('#mpCiudad',overlay).value,
+      notas: $('#mpNotas',overlay).value.trim(),
+    };
+    if(isNew){
+      state.data.luna.mapaPuntos.push({ id:uid(), lat:p.lat, lng:p.lng, ...datos });
+    } else {
+      Object.assign(p, datos);
+    }
+    await saveShared();
+    overlay.remove();
+    render();
+  };
+  if(!isNew){
+    $('#delMpBtn',overlay).onclick = async ()=>{
+      if(confirm(`¿Eliminar "${p.nombre}" del mapa?`)){
+        state.data.luna.mapaPuntos = state.data.luna.mapaPuntos.filter(x=>x.id!==p.id);
+        await saveShared();
+        overlay.remove();
+        render();
+      }
+    };
+  }
+}
+
 function openActividadModal(actId, ciudadPreset){
   const ciudades = ciudadesDelViaje();
   if(ciudades.length===0){ alert('Primero agrega al menos un tramo en el Itinerario.'); return; }
@@ -2390,7 +2549,11 @@ function bindMain(){
   $('#gearBtn').onclick = openSettingsModal;
   $('#fabAdd').onclick = ()=> {
     if(state.tab==='mesas') return openInvitadoModal();
-    if(state.tab==='luna') return state.lunaSub==='itinerario' ? openTramoModal() : openActividadModal(null, state.lunaActividadParada!=='todas'?state.lunaActividadParada:null);
+    if(state.tab==='luna'){
+      if(state.lunaSub==='itinerario') return openTramoModal();
+      if(state.lunaSub==='mapa'){ alert('Toca directamente el punto del mapa donde quieres agregar un lugar.'); return; }
+      return openActividadModal(null, state.lunaActividadParada!=='todas'?state.lunaActividadParada:null);
+    }
     openGastoModal();
   };
 
@@ -2526,6 +2689,16 @@ function bindMain(){
         const fsBtn = $('#calFsBtn');
         if(fsBtn) fsBtn.onclick = ()=> openCalendarioFullscreen();
       }
+    }
+    if(state.lunaSub==='mapa'){
+      initLunaMapa();
+      const buscarBtn = $('#lunaMapaBuscarBtn');
+      if(buscarBtn) buscarBtn.onclick = ()=> buscarLugarMapa();
+      const buscarInput = $('#lunaMapaBuscar');
+      if(buscarInput) buscarInput.onkeydown = (e)=>{ if(e.key==='Enter') buscarLugarMapa(); };
+      $$('[data-puntoopen]').forEach(el=>{
+        el.onclick = ()=> openMapaPuntoModal(el.getAttribute('data-puntoopen'));
+      });
     }
   }
   $$('[data-delgasto]').forEach(el=>{
@@ -2904,6 +3077,8 @@ async function boot(){
       // No interrumpir si está escribiendo en cualquier campo de la pantalla principal
       const activo = document.activeElement;
       if(activo && ['INPUT','TEXTAREA','SELECT'].includes(activo.tagName)) return;
+      // No interrumpir mientras se está viendo/usando el mapa del viaje (evita reiniciarlo)
+      if(state.tab==='luna' && state.lunaSub==='mapa') return;
       const resultado = await loadShared();
       if(resultado.ok && resultado.data){
         state.data = resultado.data;
