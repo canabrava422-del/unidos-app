@@ -227,6 +227,47 @@
   .mesa-tabla tfoot td{font-weight:800;background:var(--paper);border-bottom:none;}
   .mesa-tabla-completa td{background:var(--rose-soft);color:var(--rose);font-weight:700;}
 
+  /* ---------- luna de miel ---------- */
+  .luna-timeline{display:flex;flex-direction:column;}
+  .luna-parada{display:flex;gap:12px;}
+  .luna-linea{display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:28px;}
+  .luna-punto{
+    width:28px;height:28px;border-radius:50%;background:var(--indigo);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0;
+  }
+  .luna-conector{flex:1;width:2px;background:var(--line);margin:2px 0;min-height:24px;}
+  .luna-card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius-sm);
+    padding:14px;margin-bottom:16px;flex:1;cursor:pointer;
+  }
+  .luna-card-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px;}
+  .luna-ciudad{font-weight:800;font-size:15px;}
+  .luna-noches{font-size:11.5px;color:var(--ink-dim);}
+  .luna-fila{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;margin-bottom:6px;color:var(--ink);}
+  .luna-notas{font-size:12px;color:var(--ink-dim);font-style:italic;margin:4px 0;}
+  .luna-actcount{font-size:11px;color:var(--ink-dim);margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);}
+  .luna-chip{
+    font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:99px;flex-shrink:0;white-space:nowrap;
+  }
+  .luna-chip-ok{background:var(--rose-soft);color:var(--rose);}
+  .luna-chip-pend{background:var(--gold-soft);color:var(--gold);}
+
+  .luna-dia-grupo{margin-bottom:18px;}
+  .luna-dia-header{
+    font-family:ui-serif,Georgia,serif;font-size:14.5px;font-weight:700;
+    margin-bottom:8px;text-transform:capitalize;
+  }
+  .luna-act-row{
+    display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);
+    border-radius:14px;padding:11px 14px;margin-bottom:8px;cursor:pointer;
+  }
+  .luna-act-hora{font-weight:700;font-size:12.5px;color:var(--indigo);width:44px;flex-shrink:0;}
+  .luna-act-mid{flex:1;min-width:0;}
+  .luna-act-titulo{font-weight:700;font-size:13px;}
+  .luna-act-ciudad{font-size:11.5px;color:var(--ink-dim);margin-top:1px;}
+  .luna-act-hecho{opacity:.6;}
+  .luna-act-hecho .luna-act-titulo{text-decoration:line-through;}
+
   /* ---------- visor de pantalla completa ---------- */
   .zoom-overlay{
     position:fixed;inset:0;background:var(--paper);z-index:90;
@@ -396,7 +437,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v36";
+const APP_VERSION = "v37";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -440,7 +481,32 @@ function defaultData(){
       { id:'mesa-6', numero:6, nombre:'Mesa 6', asientos:10 },
     ],
     invitados: [],
-    umbralMesaAlerta: 10
+    umbralMesaAlerta: 10,
+    luna: {
+      paradas: [
+        { id:uid(), orden:1, ciudad:'Lima', fechaLlegada:null, horaLlegada:null, vueloLlegada:'', pasajeLlegadaComprado:false,
+          fechaSalida:'2026-08-18', horaSalida:'04:00', vueloSalida:'', pasajeSalidaComprado:false,
+          hotel:'', hotelReservado:false, notas:'Punto de partida', actividades:[] },
+        { id:uid(), orden:2, ciudad:'Panamá', fechaLlegada:'2026-08-18', horaLlegada:'07:37', vueloLlegada:'', pasajeLlegadaComprado:false,
+          fechaSalida:'2026-08-18', horaSalida:'15:29', vueloSalida:'', pasajeSalidaComprado:false,
+          hotel:'', hotelReservado:false, notas:'', actividades:[] },
+        { id:uid(), orden:3, ciudad:'Medellín', fechaLlegada:'2026-08-18', horaLlegada:'16:55', vueloLlegada:'', pasajeLlegadaComprado:false,
+          fechaSalida:'2026-08-21', horaSalida:'18:30', vueloSalida:'', pasajeSalidaComprado:false,
+          hotel:'', hotelReservado:false, notas:'', actividades:[] },
+        { id:uid(), orden:4, ciudad:'Cartagena', fechaLlegada:'2026-08-21', horaLlegada:'19:40', vueloLlegada:'', pasajeLlegadaComprado:false,
+          fechaSalida:'2026-08-24', horaSalida:'11:12', vueloSalida:'', pasajeSalidaComprado:false,
+          hotel:'', hotelReservado:false, notas:'', actividades:[] },
+        { id:uid(), orden:5, ciudad:'Medellín (regreso)', fechaLlegada:'2026-08-24', horaLlegada:'12:30', vueloLlegada:'', pasajeLlegadaComprado:false,
+          fechaSalida:'2026-08-24', horaSalida:'16:30', vueloSalida:'', pasajeSalidaComprado:false,
+          hotel:'', hotelReservado:false, notas:'Escala de regreso', actividades:[] },
+        { id:uid(), orden:6, ciudad:'Panamá (regreso)', fechaLlegada:'2026-08-24', horaLlegada:'17:57', vueloLlegada:'', pasajeLlegadaComprado:false,
+          fechaSalida:'2026-08-24', horaSalida:'19:09', vueloSalida:'', pasajeSalidaComprado:false,
+          hotel:'', hotelReservado:false, notas:'Escala de regreso', actividades:[] },
+        { id:uid(), orden:7, ciudad:'Lima', fechaLlegada:'2026-08-24', horaLlegada:'22:45', vueloLlegada:'', pasajeLlegadaComprado:false,
+          fechaSalida:null, horaSalida:null, vueloSalida:'', pasajeSalidaComprado:false,
+          hotel:'', hotelReservado:false, notas:'Regreso a casa', actividades:[] },
+      ]
+    }
   };
 }
 
@@ -462,6 +528,9 @@ function migrateData(data){
   }
   if(!data.invitados){ data.invitados = []; changed = true; }
   if(data.umbralMesaAlerta==null){ data.umbralMesaAlerta = 10; changed = true; }
+  if(!data.luna){ data.luna = { paradas: [] }; changed = true; }
+  if(!data.luna.paradas){ data.luna.paradas = []; changed = true; }
+  data.luna.paradas.forEach(p=>{ if(!p.actividades){ p.actividades = []; changed = true; } });
   data.objetivos.forEach(o=>{
     if(!o.subobjetivos){
       o.subobjetivos = (o.categorias||[]).map(nombre=>({id:uid(), nombre, meta:null}));
@@ -495,6 +564,8 @@ let state = {
   invitadosSearch: '',
   invitadosSelectMode: false,
   invitadosSelected: new Set(),
+  lunaSub: 'itinerario',
+  lunaActividadParada: 'todas',
 };
 
 /*
@@ -609,12 +680,13 @@ function topBar(){
   const label = state.tab==='resumen' ? `Hola, ${nombres[state.perfil.quien]||''}`
     : state.tab==='gastos' ? 'Todos los gastos'
     : state.tab==='mesas' ? 'Mesas del día'
+    : state.tab==='luna' ? 'Luna de miel'
     : 'Objetivos';
   const sub = state.tab==='resumen' ? 'Así van sus finanzas juntos' : '';
   return `
   <header class="top">
     <div>
-      <div class="title">${label==='Todos los gastos'||label==='Objetivos'||label==='Mesas del día' ? label : `Hola, <span class="knot">${nombres[state.perfil.quien]||''}</span>`}</div>
+      <div class="title">${label==='Todos los gastos'||label==='Objetivos'||label==='Mesas del día'||label==='Luna de miel' ? label : `Hola, <span class="knot">${nombres[state.perfil.quien]||''}</span>`}</div>
       ${sub?`<div class="sub">${sub}</div>`:''}
     </div>
     <div class="gear" id="gearBtn">
@@ -643,6 +715,10 @@ function tabBar(){
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
       Mesas
     </button>
+    <button data-tab="luna" class="${t==='luna'?'active':''}">
+      <svg viewBox="0 0 24 24"><path d="M3 11L21 3L13 21L11 13L3 11Z"/></svg>
+      Viaje
+    </button>
   </nav>`;
 }
 
@@ -651,6 +727,7 @@ function tabContent(){
   if(state.tab==='objetivos') return objetivosView();
   if(state.tab==='gastos') return gastosView();
   if(state.tab==='mesas') return mesasView();
+  if(state.tab==='luna') return lunaView();
   return '';
 }
 
@@ -1656,13 +1733,343 @@ function openMesaModal(mesaId){
   });
 }
 
+/* ---------------- luna de miel ---------------- */
+function fmtFechaLarga(fecha){
+  if(!fecha) return '';
+  try{
+    return new Date(fecha+'T00:00:00').toLocaleDateString('es-PE',{weekday:'long', day:'2-digit', month:'long'});
+  }catch(e){ return fecha; }
+}
+function diasEntre(f1,f2){
+  if(!f1 || !f2) return null;
+  const d1 = new Date(f1+'T00:00:00'), d2 = new Date(f2+'T00:00:00');
+  return Math.round((d2-d1)/86400000);
+}
+
+function lunaView(){
+  const sub = state.lunaSub;
+  return `
+  <div class="seg" style="margin-bottom:16px;">
+    <button type="button" data-lunasub="itinerario" class="${sub==='itinerario'?'on':''}">Itinerario</button>
+    <button type="button" data-lunasub="actividades" class="${sub==='actividades'?'on':''}">Actividades</button>
+  </div>
+  ${sub==='itinerario' ? itinerarioLunaView() : actividadesLunaView()}
+  `;
+}
+
+function chipEstado(ok, textoOk, textoPend){
+  return `<span class="luna-chip ${ok?'luna-chip-ok':'luna-chip-pend'}">${ok? '✓ '+textoOk : textoPend}</span>`;
+}
+
+function itinerarioLunaView(){
+  const paradas = [...state.data.luna.paradas].sort((a,b)=>a.orden-b.orden);
+  if(paradas.length===0){
+    return `<div class="empty">Todavía no hay paradas en el itinerario. Toca "+" para agregar la primera (por ejemplo, la ciudad de salida).</div>
+    <button class="btn-ghost" id="newParadaBtn">+ Agregar parada</button>`;
+  }
+  const items = paradas.map((p,idx)=>{
+    const noches = diasEntre(p.fechaLlegada, p.fechaSalida);
+    return `
+    <div class="luna-parada ${idx===paradas.length-1?'luna-parada-last':''}">
+      <div class="luna-linea">
+        <div class="luna-punto">${idx+1}</div>
+        ${idx<paradas.length-1?'<div class="luna-conector"></div>':''}
+      </div>
+      <div class="luna-card" data-paradaopen="${p.id}">
+        <div class="luna-card-head">
+          <span class="luna-ciudad">${p.ciudad}</span>
+          ${noches!=null && noches>0 ? `<span class="luna-noches">${noches} noche${noches===1?'':'s'}</span>` : ''}
+        </div>
+        ${p.fechaLlegada ? `
+        <div class="luna-fila">
+          <span>✈️ Llega: ${fmtDate(p.fechaLlegada)}${p.horaLlegada?' · '+p.horaLlegada:''}${p.vueloLlegada?' · '+p.vueloLlegada:''}</span>
+          ${chipEstado(p.pasajeLlegadaComprado,'Comprado','Pasaje pendiente')}
+        </div>` : ''}
+        ${p.hotel || p.hotelReservado ? `
+        <div class="luna-fila">
+          <span>🏨 ${p.hotel || 'Hotel'}</span>
+          ${chipEstado(p.hotelReservado,'Reservado','Reserva pendiente')}
+        </div>` : ''}
+        ${p.fechaSalida ? `
+        <div class="luna-fila">
+          <span>🛫 Sale: ${fmtDate(p.fechaSalida)}${p.horaSalida?' · '+p.horaSalida:''}${p.vueloSalida?' · '+p.vueloSalida:''}</span>
+          ${chipEstado(p.pasajeSalidaComprado,'Comprado','Pasaje pendiente')}
+        </div>` : ''}
+        ${p.notas ? `<div class="luna-notas">${p.notas}</div>` : ''}
+        <div class="luna-actcount">${p.actividades.length} actividad(es) planeadas · toca para editar</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="luna-timeline">${items}</div>
+  <button class="btn-ghost" id="newParadaBtn">+ Agregar parada</button>
+  `;
+}
+
+function actividadesLunaView(){
+  const paradas = [...state.data.luna.paradas].sort((a,b)=>a.orden-b.orden);
+  const filtro = state.lunaActividadParada;
+  let todas = [];
+  paradas.forEach(p=>{
+    p.actividades.forEach(a=>{
+      if(filtro==='todas' || filtro===p.id) todas.push({...a, paradaId:p.id, paradaCiudad:p.ciudad});
+    });
+  });
+  todas.sort((a,b)=> (a.fecha||'').localeCompare(b.fecha||'') || (a.hora||'').localeCompare(b.hora||''));
+
+  const grupos = {};
+  todas.forEach(a=>{
+    const key = a.fecha || 'Sin fecha';
+    if(!grupos[key]) grupos[key] = [];
+    grupos[key].push(a);
+  });
+
+  const opciones = paradas.map(p=>`<option value="${p.id}" ${filtro===p.id?'selected':''}>${p.ciudad}</option>`).join('');
+  const cuerpo = Object.keys(grupos).length===0
+    ? `<div class="empty">Todavía no hay actividades planeadas${filtro!=='todas'?' para esta parada':''}. Toca "+" para agregar la primera.</div>`
+    : Object.entries(grupos).map(([fecha, acts])=>`
+      <div class="luna-dia-grupo">
+        <div class="luna-dia-header">${fecha==='Sin fecha' ? 'Sin fecha asignada' : fmtFechaLarga(fecha)}</div>
+        ${acts.map(a=>`
+          <div class="luna-act-row ${a.hecho?'luna-act-hecho':''}" data-actopen="${a.id}">
+            <div class="luna-act-hora">${a.hora || '--:--'}</div>
+            <div class="luna-act-mid">
+              <div class="luna-act-titulo">${a.titulo}</div>
+              <div class="luna-act-ciudad">${a.paradaCiudad}${a.notas?' · '+a.notas:''}</div>
+            </div>
+            ${a.hecho ? `<span class="sub-check" title="Hecho">✓</span>` : ''}
+          </div>`).join('')}
+      </div>`).join('');
+
+  return `
+  <div class="field" style="margin-bottom:14px;">
+    <select id="lunaFiltroParada">
+      <option value="todas" ${filtro==='todas'?'selected':''}>Todas las paradas</option>
+      ${opciones}
+    </select>
+  </div>
+  ${cuerpo}
+  <button class="btn-ghost" id="newActividadBtn" style="margin-top:14px;">+ Agregar actividad</button>
+  `;
+}
+
+function openParadaModal(paradaId){
+  const isNew = !paradaId;
+  const paradas = state.data.luna.paradas;
+  const p = isNew ? {
+    id:null, orden: paradas.length ? Math.max(...paradas.map(x=>x.orden))+1 : 1,
+    ciudad:'', fechaLlegada:'', horaLlegada:'', vueloLlegada:'', pasajeLlegadaComprado:false,
+    fechaSalida:'', horaSalida:'', vueloSalida:'', pasajeSalidaComprado:false,
+    hotel:'', hotelReservado:false, notas:'', actividades:[]
+  } : paradas.find(x=>x.id===paradaId);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+  <div class="sheet">
+    <button class="close-x" id="closeSheet">✕</button>
+    <h3>${isNew ? 'Nueva parada' : p.ciudad}</h3>
+    <div class="field">
+      <label>Ciudad</label>
+      <input id="pCiudad" value="${p.ciudad}" placeholder="Ej. Cartagena">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Fecha de llegada</label>
+        <input id="pFechaLlegada" type="date" value="${p.fechaLlegada||''}">
+      </div>
+      <div class="field">
+        <label>Hora</label>
+        <input id="pHoraLlegada" type="time" value="${p.horaLlegada||''}">
+      </div>
+    </div>
+    <div class="field">
+      <label>Vuelo/transporte de llegada (opcional)</label>
+      <input id="pVueloLlegada" value="${p.vueloLlegada||''}" placeholder="Ej. Copa Airlines CM 123">
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:-6px 0 14px;cursor:pointer;">
+      <input type="checkbox" id="pPasajeLlegada" ${p.pasajeLlegadaComprado?'checked':''}> Pasaje de llegada comprado
+    </label>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Fecha de salida</label>
+        <input id="pFechaSalida" type="date" value="${p.fechaSalida||''}">
+      </div>
+      <div class="field">
+        <label>Hora</label>
+        <input id="pHoraSalida" type="time" value="${p.horaSalida||''}">
+      </div>
+    </div>
+    <div class="field">
+      <label>Vuelo/transporte de salida (opcional)</label>
+      <input id="pVueloSalida" value="${p.vueloSalida||''}" placeholder="Ej. Avianca AV 456">
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:-6px 0 14px;cursor:pointer;">
+      <input type="checkbox" id="pPasajeSalida" ${p.pasajeSalidaComprado?'checked':''}> Pasaje de salida comprado
+    </label>
+
+    <div class="field">
+      <label>Hotel (opcional)</label>
+      <input id="pHotel" value="${p.hotel||''}" placeholder="Nombre del hotel">
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:-6px 0 14px;cursor:pointer;">
+      <input type="checkbox" id="pHotelReservado" ${p.hotelReservado?'checked':''}> Hotel reservado
+    </label>
+
+    <div class="field">
+      <label>Notas (opcional)</label>
+      <input id="pNotas" value="${p.notas||''}" placeholder="Ej. escala, con quién, etc.">
+    </div>
+
+    <button class="btn-primary" id="saveParadaBtn">${isNew?'Agregar parada':'Guardar cambios'}</button>
+    ${!isNew ? `<button class="btn-ghost" id="delParadaBtn">Eliminar parada</button>` : ''}
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
+  $('#closeSheet',overlay).onclick = ()=> overlay.remove();
+
+  $('#saveParadaBtn',overlay).onclick = async ()=>{
+    const ciudad = $('#pCiudad',overlay).value.trim();
+    if(!ciudad){ alert('Escribe el nombre de la ciudad.'); return; }
+    const datos = {
+      ciudad,
+      fechaLlegada: $('#pFechaLlegada',overlay).value || null,
+      horaLlegada: $('#pHoraLlegada',overlay).value || null,
+      vueloLlegada: $('#pVueloLlegada',overlay).value.trim(),
+      pasajeLlegadaComprado: $('#pPasajeLlegada',overlay).checked,
+      fechaSalida: $('#pFechaSalida',overlay).value || null,
+      horaSalida: $('#pHoraSalida',overlay).value || null,
+      vueloSalida: $('#pVueloSalida',overlay).value.trim(),
+      pasajeSalidaComprado: $('#pPasajeSalida',overlay).checked,
+      hotel: $('#pHotel',overlay).value.trim(),
+      hotelReservado: $('#pHotelReservado',overlay).checked,
+      notas: $('#pNotas',overlay).value.trim(),
+    };
+    if(isNew){
+      state.data.luna.paradas.push({ id:uid(), orden:p.orden, actividades:[], ...datos });
+    } else {
+      Object.assign(p, datos);
+    }
+    await saveShared();
+    overlay.remove();
+    render();
+  };
+  if(!isNew){
+    $('#delParadaBtn',overlay).onclick = async ()=>{
+      if(confirm(`¿Eliminar "${p.ciudad}" del itinerario? Se borrarán también sus actividades planeadas.`)){
+        state.data.luna.paradas = state.data.luna.paradas.filter(x=>x.id!==p.id);
+        await saveShared();
+        overlay.remove();
+        render();
+      }
+    };
+  }
+}
+
+function openActividadModal(actId, paradaIdPreset){
+  const paradas = [...state.data.luna.paradas].sort((a,b)=>a.orden-b.orden);
+  if(paradas.length===0){ alert('Primero agrega al menos una parada en el Itinerario.'); return; }
+  let paradaOwner = null, a = null;
+  const isNew = !actId;
+  if(isNew){
+    a = { id:null, fecha:'', hora:'', titulo:'', notas:'', hecho:false };
+    paradaOwner = paradas.find(p=>p.id===paradaIdPreset) || paradas[0];
+  } else {
+    for(const p of paradas){
+      const found = p.actividades.find(x=>x.id===actId);
+      if(found){ a = found; paradaOwner = p; break; }
+    }
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `
+  <div class="sheet">
+    <button class="close-x" id="closeSheet">✕</button>
+    <h3>${isNew?'Nueva actividad':'Editar actividad'}</h3>
+    <div class="field">
+      <label>Parada</label>
+      <select id="aParada">${paradas.map(p=>`<option value="${p.id}" ${paradaOwner.id===p.id?'selected':''}>${p.ciudad}</option>`).join('')}</select>
+    </div>
+    <div class="field">
+      <label>¿Qué van a hacer?</label>
+      <input id="aTitulo" value="${a.titulo}" placeholder="Ej. Tour por la ciudad amurallada">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Fecha</label>
+        <input id="aFecha" type="date" value="${a.fecha||''}">
+      </div>
+      <div class="field">
+        <label>Hora</label>
+        <input id="aHora" type="time" value="${a.hora||''}">
+      </div>
+    </div>
+    <div class="field">
+      <label>Notas (opcional)</label>
+      <input id="aNotas" value="${a.notas||''}" placeholder="Dirección, costo, reserva...">
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:-6px 0 14px;cursor:pointer;">
+      <input type="checkbox" id="aHecho" ${a.hecho?'checked':''}> Ya está confirmado/hecho
+    </label>
+    <button class="btn-primary" id="saveActBtn">${isNew?'Agregar actividad':'Guardar cambios'}</button>
+    ${!isNew ? `<button class="btn-ghost" id="delActBtn">Eliminar actividad</button>` : ''}
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
+  $('#closeSheet',overlay).onclick = ()=> overlay.remove();
+
+  $('#saveActBtn',overlay).onclick = async ()=>{
+    const titulo = $('#aTitulo',overlay).value.trim();
+    if(!titulo){ alert('Escribe qué van a hacer.'); return; }
+    const nuevaParadaId = $('#aParada',overlay).value;
+    const datos = {
+      titulo,
+      fecha: $('#aFecha',overlay).value || '',
+      hora: $('#aHora',overlay).value || '',
+      notas: $('#aNotas',overlay).value.trim(),
+      hecho: $('#aHecho',overlay).checked,
+    };
+    if(isNew){
+      const destino = state.data.luna.paradas.find(p=>p.id===nuevaParadaId);
+      destino.actividades.push({ id:uid(), ...datos });
+    } else {
+      Object.assign(a, datos);
+      if(nuevaParadaId !== paradaOwner.id){
+        paradaOwner.actividades = paradaOwner.actividades.filter(x=>x.id!==a.id);
+        const destino = state.data.luna.paradas.find(p=>p.id===nuevaParadaId);
+        destino.actividades.push(a);
+      }
+    }
+    await saveShared();
+    overlay.remove();
+    render();
+  };
+  if(!isNew){
+    $('#delActBtn',overlay).onclick = async ()=>{
+      if(confirm(`¿Eliminar "${a.titulo}"?`)){
+        paradaOwner.actividades = paradaOwner.actividades.filter(x=>x.id!==a.id);
+        await saveShared();
+        overlay.remove();
+        render();
+      }
+    };
+  }
+}
+
 /* ---------------- bind events ---------------- */
 function bindMain(){
   $$('[data-tab]').forEach(el=>{
     el.onclick = ()=>{ state.tab = el.getAttribute('data-tab'); render(); };
   });
   $('#gearBtn').onclick = openSettingsModal;
-  $('#fabAdd').onclick = ()=> { state.tab==='mesas' ? openInvitadoModal() : openGastoModal(); };
+  $('#fabAdd').onclick = ()=> {
+    if(state.tab==='mesas') return openInvitadoModal();
+    if(state.tab==='luna') return state.lunaSub==='itinerario' ? openParadaModal() : openActividadModal(null, state.lunaActividadParada!=='todas'?state.lunaActividadParada:null);
+    openGastoModal();
+  };
 
   if(state.tab==='objetivos'){
     $$('[data-objopen]').forEach(el=>{
@@ -1747,6 +2154,26 @@ function bindMain(){
           }
         }
       };
+    }
+  }
+  if(state.tab==='luna'){
+    $$('[data-lunasub]').forEach(el=>{
+      el.onclick = ()=>{ state.lunaSub = el.getAttribute('data-lunasub'); render(); };
+    });
+    if(state.lunaSub==='itinerario'){
+      $$('[data-paradaopen]').forEach(el=>{
+        el.onclick = ()=> openParadaModal(el.getAttribute('data-paradaopen'));
+      });
+      const nb = $('#newParadaBtn'); if(nb) nb.onclick = ()=> openParadaModal();
+    }
+    if(state.lunaSub==='actividades'){
+      const sel = $('#lunaFiltroParada');
+      if(sel) sel.onchange = e=>{ state.lunaActividadParada = e.target.value; render(); };
+      $$('[data-actopen]').forEach(el=>{
+        el.onclick = ()=> openActividadModal(el.getAttribute('data-actopen'));
+      });
+      const nb = $('#newActividadBtn');
+      if(nb) nb.onclick = ()=> openActividadModal(null, state.lunaActividadParada!=='todas'?state.lunaActividadParada:null);
     }
   }
   $$('[data-delgasto]').forEach(el=>{
