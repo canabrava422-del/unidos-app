@@ -289,6 +289,33 @@
   .luna-hotel-ciudad{font-weight:700;font-size:13px;}
   .luna-hotel-nombre{font-size:11.5px;color:var(--ink-dim);margin-top:1px;}
 
+  .cal-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;-webkit-overflow-scrolling:touch;}
+  .cal-tabla{border-collapse:collapse;font-size:11px;width:100%;}
+  .cal-tabla th, .cal-tabla td{border:1px solid var(--line);padding:0;text-align:center;}
+  .cal-tabla th{
+    background:var(--paper);color:var(--ink);font-weight:700;padding:8px 10px;
+    white-space:nowrap;position:sticky;top:0;z-index:1;
+  }
+  .cal-esquina{position:sticky;left:0;top:0;z-index:2;background:var(--paper);}
+  .cal-hora{
+    background:var(--paper);color:var(--ink-dim);font-weight:600;font-size:10.5px;
+    padding:6px 10px;white-space:nowrap;position:sticky;left:0;
+  }
+  .cal-vacio{height:28px;min-width:76px;}
+  .cal-evento{
+    min-width:76px;padding:4px 6px;vertical-align:middle;
+  }
+  .cal-ev-label{font-size:10px;font-weight:700;line-height:1.25;padding:2px 0;}
+  .cal-ev-vuelo{background:var(--indigo-soft);}
+  .cal-ev-vuelo .cal-ev-label{color:var(--indigo);}
+  .cal-ev-actividad{background:var(--gold-soft);}
+  .cal-ev-actividad .cal-ev-label{color:var(--gold);}
+  .cal-legend-dot{
+    display:inline-block;width:9px;height:9px;border-radius:3px;margin:0 4px 0 10px;vertical-align:middle;
+  }
+  .cal-legend-dot.cal-ev-vuelo{background:var(--indigo);}
+  .cal-legend-dot.cal-ev-actividad{background:var(--gold);}
+
   /* ---------- visor de pantalla completa ---------- */
   .zoom-overlay{
     position:fixed;inset:0;background:var(--paper);z-index:90;
@@ -458,7 +485,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v38";
+const APP_VERSION = "v39";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -564,6 +591,7 @@ function migrateData(data){
   if(!data.luna.actividades){ data.luna.actividades = []; changed = true; }
   if(!data.luna.hoteles){ data.luna.hoteles = []; changed = true; }
   data.luna.tramos.forEach(t=>{ if(!t.escalaTour){ t.escalaTour = {tourPlaneado:false,tourComprado:false,tourPagado:false,notas:''}; changed = true; } });
+  data.luna.actividades.forEach(a=>{ if(a.horaFin==null){ a.horaFin=''; changed = true; } });
   data.objetivos.forEach(o=>{
     if(!o.subobjetivos){
       o.subobjetivos = (o.categorias||[]).map(nombre=>({id:uid(), nombre, meta:null}));
@@ -599,6 +627,7 @@ let state = {
   invitadosSelected: new Set(),
   lunaSub: 'itinerario',
   lunaActividadParada: 'todas',
+  lunaActVista: 'lista',
 };
 
 /*
@@ -1809,6 +1838,125 @@ function ciudadesDelViaje(){
   return [...set];
 }
 
+function horaATexto(dec){
+  const h = Math.floor(dec)%24;
+  const m = Math.round((dec-Math.floor(dec))*60);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+
+function calendarioEventos(){
+  const eventos = [];
+  const fechas = new Set();
+
+  state.data.luna.tramos.forEach(t=>{
+    if(!t.fechaSalida || !t.horaSalida) return;
+    const [hS,mS] = t.horaSalida.split(':').map(Number);
+    const horaIni = hS + mS/60;
+    const label = `✈ ${t.origen}→${t.destino}`;
+    if(t.fechaLlegada && t.horaLlegada && t.fechaLlegada !== t.fechaSalida){
+      eventos.push({ fecha:t.fechaSalida, horaIni, horaFin:24, label, tipo:'vuelo' });
+      const [hL,mL] = t.horaLlegada.split(':').map(Number);
+      eventos.push({ fecha:t.fechaLlegada, horaIni:0, horaFin:Math.max(0.5,hL+mL/60), label, tipo:'vuelo' });
+      fechas.add(t.fechaSalida); fechas.add(t.fechaLlegada);
+    } else {
+      let horaFin = horaIni + 1;
+      if(t.horaLlegada){
+        const [hL,mL] = t.horaLlegada.split(':').map(Number);
+        const hf = hL + mL/60;
+        if(hf>horaIni) horaFin = hf;
+      }
+      eventos.push({ fecha:t.fechaSalida, horaIni, horaFin:Math.min(24,horaFin), label, tipo:'vuelo' });
+      fechas.add(t.fechaSalida);
+    }
+  });
+
+  state.data.luna.actividades.forEach(a=>{
+    if(!a.fecha) return;
+    let horaIni = 0;
+    if(a.hora){ const [h,m]=a.hora.split(':').map(Number); horaIni = h+m/60; }
+    let horaFin = horaIni + 1;
+    if(a.horaFin){ const [h2,m2]=a.horaFin.split(':').map(Number); const hf=h2+m2/60; if(hf>horaIni) horaFin = hf; }
+    eventos.push({ fecha:a.fecha, horaIni, horaFin:Math.min(24,horaFin), label:`🎟 ${a.titulo}`, tipo:'actividad' });
+    fechas.add(a.fecha);
+  });
+
+  return { eventos, fechas:[...fechas].sort() };
+}
+
+function rangoFechasCompleto(fechas){
+  if(fechas.length===0) return [];
+  const out = [];
+  let d = new Date(fechas[0]+'T00:00:00');
+  const dMax = new Date(fechas[fechas.length-1]+'T00:00:00');
+  while(d<=dMax){
+    out.push(d.toISOString().slice(0,10));
+    d.setDate(d.getDate()+1);
+  }
+  return out;
+}
+
+function calendarioHorasHTML(){
+  const { eventos, fechas } = calendarioEventos();
+  if(fechas.length===0){
+    return `<div class="empty">Agrega tramos y/o actividades con fecha para poder armar el calendario por horas.</div>`;
+  }
+  const dias = rangoFechasCompleto(fechas);
+
+  // matriz[fecha][hora] = {estado:'libre'|'consumido'|'evento', rowspan, eventos:[]}
+  const matriz = {};
+  dias.forEach(f=>{ matriz[f] = Array.from({length:24}, ()=>({estado:'libre'})); });
+  [...eventos].sort((a,b)=>a.horaIni-b.horaIni).forEach(ev=>{
+    if(!matriz[ev.fecha]) return;
+    const startHour = Math.max(0, Math.min(23, Math.floor(ev.horaIni)));
+    const endExcl = Math.max(startHour+1, Math.min(24, Math.ceil(ev.horaFin)));
+    const rowspan = endExcl - startHour;
+    const celda = matriz[ev.fecha][startHour];
+    if(celda.estado==='libre'){
+      celda.estado = 'evento';
+      celda.rowspan = rowspan;
+      celda.eventos = [ev];
+      for(let h=startHour+1; h<startHour+rowspan && h<24; h++){ matriz[ev.fecha][h] = {estado:'consumido'}; }
+    } else if(celda.estado==='evento'){
+      celda.eventos.push(ev);
+      celda.rowspan = Math.max(celda.rowspan, rowspan);
+      for(let h=startHour+1; h<startHour+celda.rowspan && h<24; h++){
+        if(!matriz[ev.fecha][h] || matriz[ev.fecha][h].estado==='libre') matriz[ev.fecha][h] = {estado:'consumido'};
+      }
+    }
+  });
+
+  let thead = `<tr><th class="cal-esquina"></th>${dias.map(f=>`<th>${fmtDate(f)}</th>`).join('')}</tr>`;
+  let filas = '';
+  for(let h=0; h<24; h++){
+    let fila = `<tr><td class="cal-hora">${String(h).padStart(2,'0')}:00</td>`;
+    dias.forEach(f=>{
+      const c = matriz[f][h];
+      if(c.estado==='consumido') return; // ya cubierta por un rowspan de una fila anterior
+      if(c.estado==='evento'){
+        const clases = c.eventos.map(e=>`cal-ev-${e.tipo}`).join(' ');
+        const contenido = c.eventos.map(e=>`<div class="cal-ev-label">${e.label}</div>`).join('');
+        fila += `<td class="cal-evento ${clases}" rowspan="${c.rowspan}">${contenido}</td>`;
+      } else {
+        fila += `<td class="cal-vacio"></td>`;
+      }
+    });
+    fila += '</tr>';
+    filas += fila;
+  }
+
+  return `
+  <div class="cal-wrap">
+    <table class="cal-tabla">
+      <thead>${thead}</thead>
+      <tbody>${filas}</tbody>
+    </table>
+  </div>
+  <p style="font-size:10.5px;color:var(--ink-dim);margin:8px 2px 0;">
+    <span class="cal-legend-dot cal-ev-vuelo"></span> Vuelos/transporte &nbsp;
+    <span class="cal-legend-dot cal-ev-actividad"></span> Actividades/tours
+  </p>`;
+}
+
 function itinerarioLunaView(){
   const tramos = [...state.data.luna.tramos].sort((a,b)=>a.orden-b.orden);
   if(tramos.length===0){
@@ -1882,6 +2030,28 @@ function hotelesLunaHTML(){
 function actividadesLunaView(){
   const ciudades = ciudadesDelViaje();
   const filtro = state.lunaActividadParada;
+  const vista = state.lunaActVista || 'lista';
+
+  const opciones = ciudades.map(c=>`<option value="${c}" ${filtro===c?'selected':''}>${c}</option>`).join('');
+  const selectorCiudad = `
+  <div class="field" style="margin-bottom:14px;">
+    <select id="lunaFiltroParada">
+      <option value="todas" ${filtro==='todas'?'selected':''}>Todas las ciudades</option>
+      ${opciones}
+    </select>
+  </div>`;
+
+  const toggleVista = `
+  <div class="seg" style="margin-bottom:14px;">
+    <button type="button" data-lunaactvista="lista" class="${vista==='lista'?'on':''}">Lista</button>
+    <button type="button" data-lunaactvista="calendario" class="${vista==='calendario'?'on':''}">Calendario por horas</button>
+  </div>`;
+
+  if(vista==='calendario'){
+    return `${toggleVista}${calendarioHorasHTML()}
+    <button class="btn-ghost" id="newActividadBtn" style="margin-top:14px;">+ Agregar actividad</button>`;
+  }
+
   let todas = state.data.luna.actividades.filter(a=> filtro==='todas' || a.ciudad===filtro);
   todas = [...todas].sort((a,b)=> (a.fecha||'').localeCompare(b.fecha||'') || (a.hora||'').localeCompare(b.hora||''));
 
@@ -1892,7 +2062,6 @@ function actividadesLunaView(){
     grupos[key].push(a);
   });
 
-  const opciones = ciudades.map(c=>`<option value="${c}" ${filtro===c?'selected':''}>${c}</option>`).join('');
   const cuerpo = Object.keys(grupos).length===0
     ? `<div class="empty">Todavía no hay actividades planeadas${filtro!=='todas'?' para esta ciudad':''}. Toca "+" para agregar la primera.</div>`
     : Object.entries(grupos).map(([fecha, acts])=>`
@@ -1900,7 +2069,7 @@ function actividadesLunaView(){
         <div class="luna-dia-header">${fecha==='Sin fecha' ? 'Sin fecha asignada' : fmtFechaLarga(fecha)}</div>
         ${acts.map(a=>`
           <div class="luna-act-row ${a.hecho?'luna-act-hecho':''}" data-actopen="${a.id}">
-            <div class="luna-act-hora">${a.hora || '--:--'}</div>
+            <div class="luna-act-hora">${a.hora || '--:--'}${a.horaFin?'–'+a.horaFin:''}</div>
             <div class="luna-act-mid">
               <div class="luna-act-titulo">${a.titulo}</div>
               <div class="luna-act-ciudad">${a.ciudad}${a.notas?' · '+a.notas:''}</div>
@@ -1910,12 +2079,8 @@ function actividadesLunaView(){
       </div>`).join('');
 
   return `
-  <div class="field" style="margin-bottom:14px;">
-    <select id="lunaFiltroParada">
-      <option value="todas" ${filtro==='todas'?'selected':''}>Todas las ciudades</option>
-      ${opciones}
-    </select>
-  </div>
+  ${toggleVista}
+  ${selectorCiudad}
   ${cuerpo}
   <button class="btn-ghost" id="newActividadBtn" style="margin-top:14px;">+ Agregar actividad</button>
   `;
@@ -2094,9 +2259,13 @@ function openActividadModal(actId, ciudadPreset){
         <input id="aFecha" type="date" value="${a.fecha||''}">
       </div>
       <div class="field">
-        <label>Hora</label>
+        <label>Hora de inicio</label>
         <input id="aHora" type="time" value="${a.hora||''}">
       </div>
+    </div>
+    <div class="field">
+      <label>Hora de término (opcional)</label>
+      <input id="aHoraFin" type="time" value="${a.horaFin||''}">
     </div>
     <div class="field">
       <label>Notas (opcional)</label>
@@ -2120,6 +2289,7 @@ function openActividadModal(actId, ciudadPreset){
       titulo,
       fecha: $('#aFecha',overlay).value || '',
       hora: $('#aHora',overlay).value || '',
+      horaFin: $('#aHoraFin',overlay).value || '',
       notas: $('#aNotas',overlay).value.trim(),
       hecho: $('#aHecho',overlay).checked,
     };
@@ -2274,6 +2444,9 @@ function bindMain(){
       });
     }
     if(state.lunaSub==='actividades'){
+      $$('[data-lunaactvista]').forEach(el=>{
+        el.onclick = ()=>{ state.lunaActVista = el.getAttribute('data-lunaactvista'); render(); };
+      });
       const sel = $('#lunaFiltroParada');
       if(sel) sel.onchange = e=>{ state.lunaActividadParada = e.target.value; render(); };
       $$('[data-actopen]').forEach(el=>{
