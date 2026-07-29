@@ -289,23 +289,29 @@
   .luna-hotel-ciudad{font-weight:700;font-size:13px;}
   .luna-hotel-nombre{font-size:11.5px;color:var(--ink-dim);margin-top:1px;}
 
-  .cal-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;-webkit-overflow-scrolling:touch;}
-  .cal-tabla{border-collapse:collapse;font-size:11px;width:100%;}
+  .cal-wrap{
+    --cal-scale:1; overflow:auto; border:1px solid var(--line); border-radius:12px;
+    -webkit-overflow-scrolling:touch; touch-action:pan-x pan-y;
+  }
+  .cal-wrap-fs{flex:1; border-radius:0; border:none; border-top:1px solid var(--line);}
+  .cal-tabla{border-collapse:collapse; font-size:calc(11px * var(--cal-scale)); width:100%;}
   .cal-tabla th, .cal-tabla td{border:1px solid var(--line);padding:0;text-align:center;}
   .cal-tabla th{
-    background:var(--paper);color:var(--ink);font-weight:700;padding:8px 10px;
+    background:var(--paper);color:var(--ink);font-weight:700;
+    padding:calc(8px * var(--cal-scale)) calc(10px * var(--cal-scale));
     white-space:nowrap;position:sticky;top:0;z-index:1;
   }
   .cal-esquina{position:sticky;left:0;top:0;z-index:2;background:var(--paper);}
   .cal-hora{
-    background:var(--paper);color:var(--ink-dim);font-weight:600;font-size:10.5px;
-    padding:6px 10px;white-space:nowrap;position:sticky;left:0;
+    background:var(--paper);color:var(--ink-dim);font-weight:600;font-size:calc(10.5px * var(--cal-scale));
+    padding:calc(6px * var(--cal-scale)) calc(10px * var(--cal-scale));white-space:nowrap;position:sticky;left:0;
   }
-  .cal-vacio{height:28px;min-width:76px;}
+  .cal-vacio{height:calc(28px * var(--cal-scale));min-width:calc(76px * var(--cal-scale));}
   .cal-evento{
-    min-width:76px;padding:4px 6px;vertical-align:middle;
+    min-width:calc(76px * var(--cal-scale));padding:calc(4px * var(--cal-scale)) calc(6px * var(--cal-scale));
+    vertical-align:middle;
   }
-  .cal-ev-label{font-size:10px;font-weight:700;line-height:1.25;padding:2px 0;}
+  .cal-ev-label{font-size:calc(10px * var(--cal-scale));font-weight:700;line-height:1.25;padding:2px 0;}
   .cal-ev-vuelo{background:var(--indigo-soft);}
   .cal-ev-vuelo .cal-ev-label{color:var(--indigo);}
   .cal-ev-actividad{background:var(--gold-soft);}
@@ -485,7 +491,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v39";
+const APP_VERSION = "v40";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -1608,6 +1614,37 @@ function openMesaFullscreen(mesaId){
   openFullscreenViewer(`Mesa ${m.numero} · ${escapeHtml(m.nombre)}`, mesaSVG(m, ocupantes));
 }
 
+function initPinchZoomScale(frameEl, opts={}){
+  if(!frameEl || frameEl.__pzScaleInit) return;
+  frameEl.__pzScaleInit = true;
+  const min = opts.min || 0.6, max = opts.max || 3;
+  let scale = 1, startDist = 0, startScale = 1, lastTap = 0;
+  const dist = (t1,t2)=> Math.hypot(t1.clientX-t2.clientX, t1.clientY-t2.clientY);
+  frameEl.style.setProperty('--cal-scale', scale);
+
+  frameEl.addEventListener('touchstart',(e)=>{
+    if(e.touches.length===2){ startDist = dist(e.touches[0],e.touches[1]); startScale = scale; }
+  }, {passive:true});
+
+  frameEl.addEventListener('touchmove',(e)=>{
+    if(e.touches.length===2 && startDist){
+      e.preventDefault();
+      const d = dist(e.touches[0],e.touches[1]);
+      scale = Math.min(max, Math.max(min, startScale * (d/startDist)));
+      frameEl.style.setProperty('--cal-scale', scale);
+    }
+  }, {passive:false});
+
+  frameEl.addEventListener('touchend',(e)=>{
+    if(e.touches.length<2) startDist = 0;
+    if(e.touches.length===0){
+      const now = Date.now();
+      if(now-lastTap<300){ scale = 1; frameEl.style.setProperty('--cal-scale', scale); }
+      lastTap = now;
+    }
+  });
+}
+
 function initPinchZoom(frameEl){
   if(!frameEl || frameEl.__pzInit) return;
   frameEl.__pzInit = true;
@@ -1895,11 +1932,15 @@ function rangoFechasCompleto(fechas){
   return out;
 }
 
-function calendarioHorasHTML(){
+function hora12(h){
+  const periodo = h<12 ? 'AM' : 'PM';
+  let h12 = h%12; if(h12===0) h12=12;
+  return `${h12}:00 ${periodo}`;
+}
+
+function calendarioTablaHTML(){
   const { eventos, fechas } = calendarioEventos();
-  if(fechas.length===0){
-    return `<div class="empty">Agrega tramos y/o actividades con fecha para poder armar el calendario por horas.</div>`;
-  }
+  if(fechas.length===0) return null;
   const dias = rangoFechasCompleto(fechas);
 
   // matriz[fecha][hora] = {estado:'libre'|'consumido'|'evento', rowspan, eventos:[]}
@@ -1928,7 +1969,7 @@ function calendarioHorasHTML(){
   let thead = `<tr><th class="cal-esquina"></th>${dias.map(f=>`<th>${fmtDate(f)}</th>`).join('')}</tr>`;
   let filas = '';
   for(let h=0; h<24; h++){
-    let fila = `<tr><td class="cal-hora">${String(h).padStart(2,'0')}:00</td>`;
+    let fila = `<tr><td class="cal-hora">${hora12(h)}</td>`;
     dias.forEach(f=>{
       const c = matriz[f][h];
       if(c.estado==='consumido') return; // ya cubierta por un rowspan de una fila anterior
@@ -1944,18 +1985,44 @@ function calendarioHorasHTML(){
     filas += fila;
   }
 
+  return `<table class="cal-tabla"><thead>${thead}</thead><tbody>${filas}</tbody></table>`;
+}
+
+function calendarioHorasHTML(){
+  const tabla = calendarioTablaHTML();
+  if(!tabla){
+    return `<div class="empty">Agrega tramos y/o actividades con fecha para poder armar el calendario por horas.</div>`;
+  }
   return `
-  <div class="cal-wrap">
-    <table class="cal-tabla">
-      <thead>${thead}</thead>
-      <tbody>${filas}</tbody>
-    </table>
+  <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+    <button class="btn-ghost" id="calFsBtn" style="margin:0;">⛶ Pantalla completa</button>
   </div>
+  <div class="cal-wrap" id="calFrame">${tabla}</div>
+  <p class="pz-hint">Pellizca con dos dedos para hacer zoom · desliza para moverte · doble toque para restablecer</p>
   <p style="font-size:10.5px;color:var(--ink-dim);margin:8px 2px 0;">
     <span class="cal-legend-dot cal-ev-vuelo"></span> Vuelos/transporte &nbsp;
     <span class="cal-legend-dot cal-ev-actividad"></span> Actividades/tours
   </p>`;
 }
+
+function openCalendarioFullscreen(){
+  const tabla = calendarioTablaHTML();
+  if(!tabla) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'zoom-overlay';
+  overlay.innerHTML = `
+    <div class="zoom-header">
+      <span>Calendario por horas</span>
+      <button id="zoomCloseBtn">✕</button>
+    </div>
+    <div class="cal-wrap cal-wrap-fs" id="calFsFrame">${tabla}</div>
+    <p class="pz-hint">Pellizca con dos dedos para hacer zoom · desliza para moverte · doble toque para restablecer</p>
+  `;
+  document.body.appendChild(overlay);
+  $('#zoomCloseBtn',overlay).onclick = ()=> overlay.remove();
+  initPinchZoomScale($('#calFsFrame',overlay));
+}
+
 
 function itinerarioLunaView(){
   const tramos = [...state.data.luna.tramos].sort((a,b)=>a.orden-b.orden);
@@ -2454,6 +2521,11 @@ function bindMain(){
       });
       const nb = $('#newActividadBtn');
       if(nb) nb.onclick = ()=> openActividadModal(null, state.lunaActividadParada!=='todas'?state.lunaActividadParada:null);
+      if(state.lunaActVista==='calendario'){
+        initPinchZoomScale($('#calFrame'));
+        const fsBtn = $('#calFsBtn');
+        if(fsBtn) fsBtn.onclick = ()=> openCalendarioFullscreen();
+      }
     }
   }
   $$('[data-delgasto]').forEach(el=>{
