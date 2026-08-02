@@ -1,4 +1,4 @@
-const CACHE = "unidos-v48";
+const CACHE = "unidos-v49";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
