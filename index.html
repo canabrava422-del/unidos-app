@@ -288,8 +288,14 @@
     background:var(--card);border:1px solid var(--line);border-radius:14px;
     padding:12px 14px;margin-bottom:9px;cursor:pointer;
   }
+  .luna-hotel-row > div[data-puntoopen]{flex:1;min-width:0;}
   .luna-hotel-ciudad{font-weight:700;font-size:13px;}
   .luna-hotel-nombre{font-size:11.5px;color:var(--ink-dim);margin-top:1px;}
+  .luna-gmaps-btn{
+    flex-shrink:0;width:32px;height:32px;border-radius:50%;background:var(--paper);
+    border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+    font-size:14px;text-decoration:none;
+  }
 
   .luna-mapa-wrap{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;}
   #lunaMapa{height:380px;width:100%;background:var(--line);}
@@ -496,7 +502,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v41";
+const APP_VERSION = "v45";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -2327,6 +2333,7 @@ function mapaLunaView(){
       <input id="lunaMapaBuscar" placeholder="Buscar un lugar o dirección...">
     </div>
     <button class="btn-ghost" id="lunaMapaBuscarBtn" style="width:auto;margin:0;flex-shrink:0;">Buscar</button>
+    <button class="btn-ghost" id="lunaMapaUbicacionBtn" style="width:auto;margin:0;flex-shrink:0;" aria-label="Mi ubicación">📍</button>
   </div>
   <div class="luna-mapa-wrap"><div id="lunaMapa"></div></div>
   <p style="text-align:center;font-size:11px;color:var(--ink-dim);margin:8px 0 16px;">Toca el mapa para marcar un lugar nuevo; toca un marcador ya puesto para editarlo.</p>
@@ -2339,11 +2346,12 @@ function puntosMapaListaHTML(){
   const puntos = state.data.luna.mapaPuntos;
   if(puntos.length===0) return `<div class="empty">Todavía no hay puntos marcados. Busca un lugar arriba o toca directamente el mapa.</div>`;
   return puntos.map(p=>`
-    <div class="luna-hotel-row" data-puntoopen="${p.id}">
-      <div class="luna-hotel-mid">
+    <div class="luna-hotel-row">
+      <div class="luna-hotel-mid" data-puntoopen="${p.id}">
         <div class="luna-hotel-ciudad">${p.nombre}</div>
         <div class="luna-hotel-nombre">${p.ciudad?p.ciudad+(p.notas?' · ':''):''}${p.notas||''}</div>
       </div>
+      <a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}" target="_blank" rel="noopener" class="luna-gmaps-btn" aria-label="Ver en Google Maps" onclick="event.stopPropagation()">📍</a>
     </div>`).join('');
 }
 
@@ -2351,6 +2359,7 @@ function initLunaMapa(){
   const el = document.getElementById('lunaMapa');
   if(!el || typeof L === 'undefined') return;
   if(_lunaMap){ _lunaMap.remove(); _lunaMap = null; _lunaMapMarkers = []; }
+  _lunaMyLocMarker = null;
 
   const puntos = state.data.luna.mapaPuntos;
   const centro = puntos.length ? [puntos[0].lat, puntos[0].lng] : [4.5, -74];
@@ -2393,6 +2402,38 @@ async function buscarLugarMapa(){
   btn.textContent = 'Buscar';
 }
 
+let _lunaMyLocMarker = null;
+function irAMiUbicacion(){
+  if(!navigator.geolocation){
+    alert('Tu navegador no permite compartir ubicación.');
+    return;
+  }
+  const btn = $('#lunaMapaUbicacionBtn');
+  if(btn) btn.textContent = '…';
+  navigator.geolocation.getCurrentPosition(
+    (pos)=>{
+      if(btn) btn.textContent = '📍';
+      if(!_lunaMap) return;
+      const { latitude, longitude } = pos.coords;
+      _lunaMap.setView([latitude, longitude], 14);
+      if(_lunaMyLocMarker) _lunaMap.removeLayer(_lunaMyLocMarker);
+      _lunaMyLocMarker = L.circleMarker([latitude, longitude], {
+        radius: 8, color: '#fff', weight: 3, fillColor: '#3B82F6', fillOpacity: 1
+      }).addTo(_lunaMap).bindTooltip('Estás aquí');
+    },
+    (err)=>{
+      if(btn) btn.textContent = '📍';
+      if(err.code === err.PERMISSION_DENIED){
+        alert('No diste permiso de ubicación. Revisa los permisos del sitio en la configuración de tu navegador/celular y vuelve a intentar.');
+      } else {
+        alert('No se pudo obtener tu ubicación. Revisa que el GPS/ubicación esté activado.');
+      }
+    },
+    { enableHighAccuracy:true, timeout:10000 }
+  );
+}
+
+
 function openMapaPuntoModal(puntoId, lat, lng){
   const isNew = !puntoId;
   const ciudades = ciudadesDelViaje();
@@ -2422,6 +2463,7 @@ function openMapaPuntoModal(puntoId, lat, lng){
       <input id="mpNotas" value="${p.notas||''}" placeholder="Ej. entrada 20 mil COP, reservar con anticipación...">
     </div>
     <button class="btn-primary" id="saveMpBtn">${isNew?'Agregar punto':'Guardar cambios'}</button>
+    ${!isNew ? `<a class="btn-ghost" style="display:block;text-align:center;text-decoration:none;box-sizing:border-box;" href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}" target="_blank" rel="noopener">📍 Ver en Google Maps</a>` : ''}
     ${!isNew ? `<button class="btn-ghost" id="delMpBtn">Eliminar punto</button>` : ''}
   </div>`;
   document.body.appendChild(overlay);
@@ -2696,6 +2738,8 @@ function bindMain(){
       if(buscarBtn) buscarBtn.onclick = ()=> buscarLugarMapa();
       const buscarInput = $('#lunaMapaBuscar');
       if(buscarInput) buscarInput.onkeydown = (e)=>{ if(e.key==='Enter') buscarLugarMapa(); };
+      const ubicacionBtn = $('#lunaMapaUbicacionBtn');
+      if(ubicacionBtn) ubicacionBtn.onclick = ()=> irAMiUbicacion();
       $$('[data-puntoopen]').forEach(el=>{
         el.onclick = ()=> openMapaPuntoModal(el.getAttribute('data-puntoopen'));
       });
