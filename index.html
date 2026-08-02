@@ -502,7 +502,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v49";
+const APP_VERSION = "v51";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -1161,6 +1161,9 @@ function invitadosView(){
   </div>
   <div style="display:flex;gap:8px;margin-bottom:10px;">
     <button class="btn-ghost" id="importXlsBtn" style="margin:0;flex:1;">📥 Importar desde Excel</button>
+    <button class="btn-ghost" id="exportXlsBtn" style="margin:0;flex:1;">📤 Exportar a Excel</button>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
     <button class="btn-ghost" id="selectModeBtn" style="margin:0;flex:1;">${selMode ? 'Cancelar selección' : '☑️ Seleccionar'}</button>
   </div>
   <input type="file" id="xlsInput" accept=".xlsx,.xls,.csv" style="display:none;">
@@ -1173,6 +1176,29 @@ function invitadosView(){
   ${rows || `<div class="empty">Todavía no hay invitados. Impórtalos desde Excel o agrégalos con el botón "+".</div>`}
   ${!selMode && state.data.invitados.length>0 ? `<button class="btn-ghost" id="wipeAllBtn" style="margin-top:16px;color:var(--danger);border-color:var(--danger);">🗑 Vaciar toda la lista de invitados</button>` : ''}
   `;
+}
+
+function exportarInvitadosExcel(){
+  if(state.data.invitados.length===0){ alert('Todavía no hay invitados para exportar.'); return; }
+  const mesasById = Object.fromEntries(state.data.mesas.map(m=>[m.id,m]));
+  const ordenados = [...state.data.invitados].sort((a,b)=>{
+    const ma = a.mesaId ? mesasById[a.mesaId] : null;
+    const mb = b.mesaId ? mesasById[b.mesaId] : null;
+    const na = ma ? ma.numero : 9999, nb = mb ? mb.numero : 9999;
+    if(na!==nb) return na-nb;
+    return a.nombre.localeCompare(b.nombre);
+  });
+  const filas = [['N°','Nombre','Grupo','Mesa']];
+  ordenados.forEach((inv,idx)=>{
+    const mesa = inv.mesaId ? mesasById[inv.mesaId] : null;
+    filas.push([ idx+1, inv.nombre, inv.grupo||'', mesa ? `Mesa ${mesa.numero}` : 'Sin mesa' ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  ws['!cols'] = [{wch:5},{wch:28},{wch:20},{wch:12}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Invitados');
+  const fecha = todayISO();
+  XLSX.writeFile(wb, `invitados_unidos_${fecha}.xlsx`);
 }
 
 async function handleExcelFile(file){
@@ -1599,7 +1625,7 @@ function floorPlanSVG(){
   return `<svg viewBox="${dims.minX} 0 ${dims.width} ${dims.height}" style="display:block;">${contenido}</svg>`;
 }
 
-function openFullscreenViewer(titulo, svgHtml){
+function openFullscreenViewer(titulo, svgHtml, onMount){
   const overlay = document.createElement('div');
   overlay.className = 'zoom-overlay';
   overlay.innerHTML = `
@@ -1615,16 +1641,28 @@ function openFullscreenViewer(titulo, svgHtml){
   document.body.appendChild(overlay);
   $('#zoomCloseBtn',overlay).onclick = ()=> overlay.remove();
   initPinchZoom($('#fsFrame',overlay));
+  if(onMount) onMount(overlay);
 }
 
 function openPlanoFullscreen(){
-  openFullscreenViewer('Plano de mesas', floorPlanSVG());
+  openFullscreenViewer('Plano de mesas', floorPlanSVG(), (overlay)=>{
+    overlay.querySelectorAll('[data-mesaopen]').forEach(el=>{
+      el.addEventListener('click', ()=> openMesaModal(el.getAttribute('data-mesaopen')));
+    });
+  });
 }
 
 function openMesaFullscreen(mesaId){
   const m = state.data.mesas.find(x=>x.id===mesaId);
   const ocupantes = state.data.invitados.filter(i=>i.mesaId===m.id);
-  openFullscreenViewer(`Mesa ${m.numero} · ${escapeHtml(m.nombre)}`, mesaSVG(m, ocupantes));
+  openFullscreenViewer(`Mesa ${m.numero} · ${escapeHtml(m.nombre)}`, mesaSVG(m, ocupantes), (overlay)=>{
+    overlay.querySelectorAll('.seat-occupied, .seat-empty').forEach(seat=>{
+      seat.addEventListener('click', ()=>{
+        overlay.remove();
+        openMesaModal(mesaId);
+      });
+    });
+  });
 }
 
 function initPinchZoomScale(frameEl, opts={}){
@@ -2687,6 +2725,7 @@ function bindMain(){
     if(state.mesasSub==='invitados'){
       $('#fInvSearch').oninput = e=>{ state.invitadosSearch = e.target.value; render(); };
       $('#importXlsBtn').onclick = ()=> $('#xlsInput').click();
+      $('#exportXlsBtn').onclick = ()=> exportarInvitadosExcel();
       $('#xlsInput').onchange = (e)=>{
         const file = e.target.files[0];
         if(file) handleExcelFile(file);
@@ -3186,6 +3225,8 @@ async function boot(){
       if(activo && ['INPUT','TEXTAREA','SELECT'].includes(activo.tagName)) return;
       // No interrumpir mientras se está viendo/usando el mapa del viaje (evita reiniciarlo)
       if(state.tab==='luna' && state.lunaSub==='mapa') return;
+      // No interrumpir mientras se está viendo/haciendo zoom en el plano de mesas
+      if(state.tab==='mesas') return;
       const resultado = await loadShared();
       if(resultado.ok && resultado.data){
         state.data = resultado.data;
