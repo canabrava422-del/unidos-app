@@ -297,7 +297,7 @@
     font-size:14px;text-decoration:none;
   }
 
-  .luna-mapa-wrap{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;}
+  .luna-mapa-wrap{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;position:relative;}
   #lunaMapa{height:380px;width:100%;background:var(--line);}
 
   .cal-wrap{
@@ -502,7 +502,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v46";
+const APP_VERSION = "v48";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -2335,7 +2335,10 @@ function mapaLunaView(){
     <button class="btn-ghost" id="lunaMapaBuscarBtn" style="width:auto;margin:0;flex-shrink:0;">Buscar</button>
     <button class="btn-ghost" id="lunaMapaUbicacionBtn" style="width:auto;margin:0;flex-shrink:0;" aria-label="Mi ubicación">📍</button>
   </div>
-  <div class="luna-mapa-wrap"><div id="lunaMapa"></div></div>
+  <div class="luna-mapa-wrap">
+    <button class="fs-btn" id="lunaMapaFsBtn" aria-label="Ver mapa en pantalla completa" style="z-index:1000;">⛶</button>
+    <div id="lunaMapa"></div>
+  </div>
   <p style="text-align:center;font-size:11px;color:var(--ink-dim);margin:8px 0 16px;">Toca el mapa para marcar un lugar nuevo; toca un marcador ya puesto para editarlo.</p>
   <div class="section-head"><h2>Puntos marcados</h2></div>
   ${puntosMapaListaHTML()}
@@ -2351,8 +2354,54 @@ function puntosMapaListaHTML(){
         <div class="luna-hotel-ciudad">${p.nombre}</div>
         <div class="luna-hotel-nombre">${p.ciudad?p.ciudad+(p.notas?' · ':''):''}${p.notas||''}</div>
       </div>
-      <a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}" target="_blank" rel="noopener" class="luna-gmaps-btn" aria-label="Ver en Google Maps" onclick="event.stopPropagation()">📍</a>
+      <button type="button" class="luna-gmaps-btn" data-vermapa="${p.id}" aria-label="Ver en el mapa">📍</button>
     </div>`).join('');
+}
+
+function verPuntoEnMapa(puntoId){
+  const p = state.data.luna.mapaPuntos.find(x=>x.id===puntoId);
+  if(!p || !_lunaMap) return;
+  _lunaMap.setView([p.lat, p.lng], 16);
+  const marker = _lunaMapMarkers.find(m=>{
+    const ll = m.getLatLng();
+    return Math.abs(ll.lat-p.lat)<1e-9 && Math.abs(ll.lng-p.lng)<1e-9;
+  });
+  if(marker) marker.openTooltip();
+  const el = document.getElementById('lunaMapa');
+  if(el) el.scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+let _lunaMapFs = null;
+function openMapaFullscreen(){
+  if(!_lunaMap) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'zoom-overlay';
+  overlay.innerHTML = `
+    <div class="zoom-header">
+      <span>Mapa del viaje</span>
+      <button id="zoomCloseBtn">✕</button>
+    </div>
+    <div id="lunaMapaFs" style="flex:1;"></div>
+  `;
+  document.body.appendChild(overlay);
+  $('#zoomCloseBtn',overlay).onclick = ()=>{
+    if(_lunaMapFs){ _lunaMapFs.remove(); _lunaMapFs = null; }
+    overlay.remove();
+  };
+
+  const el = document.getElementById('lunaMapaFs');
+  const puntos = state.data.luna.mapaPuntos;
+  _lunaMapFs = L.map(el).setView(_lunaMap.getCenter(), _lunaMap.getZoom());
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap', maxZoom: 19
+  }).addTo(_lunaMapFs);
+  puntos.forEach(p=>{
+    const marker = L.marker([p.lat, p.lng]).addTo(_lunaMapFs);
+    marker.bindTooltip(p.nombre);
+    marker.on('click', ()=> openMapaPuntoModal(p.id));
+  });
+  _lunaMapFs.on('click', (e)=> openMapaPuntoModal(null, e.latlng.lat, e.latlng.lng));
+  setTimeout(()=>{ if(_lunaMapFs) _lunaMapFs.invalidateSize(); }, 200);
 }
 
 function initLunaMapa(){
@@ -2360,6 +2409,7 @@ function initLunaMapa(){
   if(!el || typeof L === 'undefined') return;
   if(_lunaMap){ _lunaMap.remove(); _lunaMap = null; _lunaMapMarkers = []; }
   _lunaMyLocMarker = null;
+  _lunaBusquedaMarker = null;
 
   const puntos = state.data.luna.mapaPuntos;
   const centro = puntos.length ? [puntos[0].lat, puntos[0].lng] : [4.5, -74];
@@ -2392,7 +2442,11 @@ async function buscarLugarMapa(){
     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
     const data = await res.json();
     if(data && data[0] && _lunaMap){
-      _lunaMap.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 13);
+      const lat = parseFloat(data[0].lat), lon = parseFloat(data[0].lon);
+      _lunaMap.setView([lat, lon], 15);
+      if(_lunaBusquedaMarker) _lunaMap.removeLayer(_lunaBusquedaMarker);
+      _lunaBusquedaMarker = L.marker([lat, lon]).addTo(_lunaMap);
+      openMapaPuntoModal(null, lat, lon, q, data[0].display_name);
     } else {
       alert('No se encontró ese lugar. Prueba con otro nombre o dirección.');
     }
@@ -2402,6 +2456,7 @@ async function buscarLugarMapa(){
   btn.textContent = 'Buscar';
 }
 
+let _lunaBusquedaMarker = null;
 let _lunaMyLocMarker = null;
 function irAMiUbicacion(){
   if(!navigator.geolocation){
@@ -2434,11 +2489,11 @@ function irAMiUbicacion(){
 }
 
 
-function openMapaPuntoModal(puntoId, lat, lng){
+function openMapaPuntoModal(puntoId, lat, lng, nombrePreset, notasPreset){
   const isNew = !puntoId;
   const ciudades = ciudadesDelViaje();
   const p = isNew
-    ? { id:null, nombre:'', ciudad: ciudades[0]||'', notas:'', lat, lng }
+    ? { id:null, nombre:nombrePreset||'', ciudad: ciudades[0]||'', notas:notasPreset||'', lat, lng }
     : state.data.luna.mapaPuntos.find(x=>x.id===puntoId);
 
   const overlay = document.createElement('div');
@@ -2467,8 +2522,11 @@ function openMapaPuntoModal(puntoId, lat, lng){
     ${!isNew ? `<button class="btn-ghost" id="delMpBtn">Eliminar punto</button>` : ''}
   </div>`;
   document.body.appendChild(overlay);
-  overlay.onclick = e=>{ if(e.target===overlay) overlay.remove(); };
-  $('#closeSheet',overlay).onclick = ()=> overlay.remove();
+  const limpiarMarcadorBusqueda = ()=>{
+    if(_lunaBusquedaMarker && _lunaMap){ _lunaMap.removeLayer(_lunaBusquedaMarker); _lunaBusquedaMarker = null; }
+  };
+  overlay.onclick = e=>{ if(e.target===overlay){ overlay.remove(); limpiarMarcadorBusqueda(); } };
+  $('#closeSheet',overlay).onclick = ()=>{ overlay.remove(); limpiarMarcadorBusqueda(); };
 
   $('#saveMpBtn',overlay).onclick = async ()=>{
     const nombre = $('#mpNombre',overlay).value.trim();
@@ -2740,8 +2798,13 @@ function bindMain(){
       if(buscarInput) buscarInput.onkeydown = (e)=>{ if(e.key==='Enter') buscarLugarMapa(); };
       const ubicacionBtn = $('#lunaMapaUbicacionBtn');
       if(ubicacionBtn) ubicacionBtn.onclick = ()=> irAMiUbicacion();
+      const fsBtn = $('#lunaMapaFsBtn');
+      if(fsBtn) fsBtn.onclick = ()=> openMapaFullscreen();
       $$('[data-puntoopen]').forEach(el=>{
         el.onclick = ()=> openMapaPuntoModal(el.getAttribute('data-puntoopen'));
+      });
+      $$('[data-vermapa]').forEach(el=>{
+        el.onclick = (ev)=>{ ev.stopPropagation(); verPuntoEnMapa(el.getAttribute('data-vermapa')); };
       });
     }
   }
