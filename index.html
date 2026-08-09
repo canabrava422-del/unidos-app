@@ -502,7 +502,7 @@
 <script>
 const $ = (sel,ctx=document)=>ctx.querySelector(sel);
 const $$ = (sel,ctx=document)=>Array.from(ctx.querySelectorAll(sel));
-const APP_VERSION = "v51";
+const APP_VERSION = "v53";
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 const fmt = n => {
@@ -1410,10 +1410,9 @@ function openImportPreviewModal(raw){
     overlay.remove();
     render();
 
-    const umbral = state.data.umbralMesaAlerta || 10;
     const excedidas = state.data.mesas
       .map(m=>({ m, n: state.data.invitados.filter(i=>i.mesaId===m.id).length }))
-      .filter(x=>x.n > umbral);
+      .filter(x=>x.n > x.m.asientos);
 
     let msg = actualizados>0
       ? `${agregados} invitado(s) nuevo(s) agregados (${sentados} con mesa asignada/actualizada del Excel). ${actualizados} ya existían.`
@@ -1422,8 +1421,8 @@ function openImportPreviewModal(raw){
       msg += `\n\n🆕 Se crearon automáticamente estas mesas porque el Excel las mencionaba y no existían: ${mesasCreadas.join(', ')}.`;
     }
     if(excedidas.length){
-      msg += `\n\n⚠️ Mesas por encima del umbral de alerta (${umbral}):\n` +
-        excedidas.map(x=>`- Mesa ${x.m.numero}: ${x.n} invitados`).join('\n');
+      msg += `\n\n⚠️ Mesas por encima de su capacidad:\n` +
+        excedidas.map(x=>`- Mesa ${x.m.numero}: ${x.n} de ${x.m.asientos} asientos`).join('\n');
     }
     alert(msg);
   };
@@ -1517,7 +1516,7 @@ function mesaGroupSVG(mesa, ocupantes, cx, cy, opts={}){
   const nameFont = opts.nameFont || Math.round(rTable*0.28);
   const compacto = !!opts.compacto;
   const umbral = state.data.umbralMesaAlerta || 10;
-  const excedida = ocupantes.length > umbral;
+  const excedida = ocupantes.length > mesa.asientos;
   const colorMesa = excedida ? 'var(--danger)' : 'var(--indigo)';
   const n = Math.max(mesa.asientos, ocupantes.length, umbral);
   let seatEls = '';
@@ -1771,8 +1770,7 @@ function openMesaModal(mesaId){
   const m = state.data.mesas.find(x=>x.id===mesaId);
   const ocupantes = state.data.invitados.filter(i=>i.mesaId===m.id);
   const disponibles = state.data.invitados.filter(i=>!i.mesaId);
-  const umbral = state.data.umbralMesaAlerta || 10;
-  const excedida = ocupantes.length > umbral;
+  const excedida = ocupantes.length > m.asientos;
 
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
@@ -1780,7 +1778,7 @@ function openMesaModal(mesaId){
   <div class="sheet">
     <button class="close-x" id="closeSheet">✕</button>
     <h3>Mesa ${m.numero}</h3>
-    ${excedida ? `<p style="background:#F3DAD6;color:var(--danger);border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:600;margin:-6px 0 14px;">⚠️ Esta mesa tiene ${ocupantes.length} invitados, por encima del umbral de alerta (${umbral}).</p>` : ''}
+    ${excedida ? `<p style="background:#F3DAD6;color:var(--danger);border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:600;margin:-6px 0 14px;">⚠️ Esta mesa tiene ${ocupantes.length} invitados, por encima de su capacidad de ${m.asientos}.</p>` : ''}
     <div class="field-row">
       <div class="field">
         <label>Nombre de la mesa</label>
@@ -3121,7 +3119,7 @@ function openSettingsModal(){
       </div>
     </div>
     <div class="field">
-      <label>Umbral de alerta por mesa <span style="font-weight:400;color:var(--ink-dim);">— la mesa se pone roja al superar este número de invitados</span></label>
+      <label>Asientos mínimos a dibujar por mesa <span style="font-weight:400;color:var(--ink-dim);">— cada mesa se pone en rojo automáticamente al superar SU propia capacidad; este número solo controla cuántos asientos vacíos se dibujan como mínimo</span></label>
       <input id="sUmbral" type="number" min="1" value="${state.data.umbralMesaAlerta}">
     </div>
     <button class="btn-primary" id="saveSettings">Guardar</button>
@@ -3226,7 +3224,8 @@ async function boot(){
       // No interrumpir mientras se está viendo/usando el mapa del viaje (evita reiniciarlo)
       if(state.tab==='luna' && state.lunaSub==='mapa') return;
       // No interrumpir mientras se está viendo/haciendo zoom en el plano de mesas
-      if(state.tab==='mesas') return;
+      // (pero sí se debe seguir sincronizando la lista de Invitados con normalidad)
+      if(state.tab==='mesas' && state.mesasSub==='plano') return;
       const resultado = await loadShared();
       if(resultado.ok && resultado.data){
         state.data = resultado.data;
